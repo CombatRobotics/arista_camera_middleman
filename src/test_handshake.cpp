@@ -42,31 +42,32 @@ int main(int argc, char** argv) {
     const char* can_device = "can0";
     int can_bitrate = 500000;
     arista_camera_middleman::CanDevice can_device_handler(can_device, can_bitrate);
-
-    // Initialize CAN device
-    if (!can_device_handler.init()) {
-        std::cerr << "Failed to initialize CAN device" << std::endl;
-        return -1;
+    const int _s = can_device_handler.get_socket_fd();
+    setsockopt(_s, SOL_CAN_RAW, CAN_RAW_FILTER, NULL, 0);
+    can_frame frame; //
+    while(1) {
+        int nbytes = read(_s, &frame, sizeof(frame));
+        if(nbytes > 0) {
+            printf("can_id = 0x%X\r\ncan_dlc = %d \r\n", frame.can_id, frame.can_dlc);
+            int i = 0;
+            for(i = 0; i < 8; i++)
+                printf("data[%d] = %d\r\n", i, frame.data[i]);
+            break;
+        }
     }
-
-    // Set CAN bitrate
-    if (!can_device_handler.set_bitrate(can_bitrate)) {
-        std::cerr << "Failed to set CAN bitrate" << std::endl;
-        return -1;
-    }
-
-    can_device_handler.set_can_iface(true);
-
-    // No filter
-    if (!can_device_handler.clear_filter()) {
-        std::cerr << "Failed to clear CAN filter" << std::endl;
-        return -1;
-    }
+    // // No filter
+    // if (!can_device_handler.clear_filter()) {
+    //     std::cerr << "Failed to clear CAN filter" << std::endl;
+    //     return -1;
+    // }
     // Start state machine
     CanCommStates state = CanCommStates::UNINTIALIZED;
 
     while (g_running) {
+
+        std::cout << "Current state: " << static_cast<int>(state) << std::endl;
         switch (state) {
+
             case CanCommStates::UNINTIALIZED:
                 // Broadcast message
                 {
@@ -84,11 +85,12 @@ int main(int argc, char** argv) {
                 // Wait for ACK
                 {
                     can_frame can_data;
+                    printf("Waiting for ack\n");
                     if (!can_device_handler.receive_can_frame(&can_data)) {
                         std::cerr << "Failed to receive CAN frame" << std::endl;
                         return -1;
                     }
-
+                    printf("ACK recieved : %x\n",can_data.can_id);
                     arista_camera_middleman::protocol::RxData_t::Data rx_data;
                     arista_camera_middleman::protocol::RxData_t::FunctionId function_id;
                     function_id = arista_camera_middleman::protocol::get_rx_data(can_data, rx_data);

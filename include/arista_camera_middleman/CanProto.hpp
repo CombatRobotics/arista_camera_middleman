@@ -73,7 +73,7 @@ struct gimbal_axis_config_t {
 
 const long Broadcast_Key = 0x435249504C343536;
 constexpr angle_t MAX_ANGLE = 360.0;
-constexpr gimbal_pos_mapped_t MAX_POS_MAPPED = 0xFFFF;
+constexpr gimbal_pos_mapped_t MAX_POS_MAPPED = 0x10000;
 
 
 CanIdentifier get_can_identifier(const canid_t& can_id_data){
@@ -182,6 +182,7 @@ struct TxData_t{
         can_data_buff[0] = SENDER_CAN_ID;
         can_data_buff[1] = static_cast<uint8_t>(function_id);
         can_id_data |= CAN_EFF_FLAG;
+        printf("can_id : %x \n", can_id_data);
         return can_id_data;
     }
     can_frame get_can_frame() const {
@@ -217,6 +218,7 @@ struct TxData_t{
                 break;
             }
         }
+        return frame;
     }
 };
 

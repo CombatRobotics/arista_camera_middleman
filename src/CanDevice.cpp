@@ -30,6 +30,7 @@ inline std::string get_privileged_cmd(const std::string &cmd)
 inline int exec_cmd(const std::string &cmd)
 {
     int ret = system(cmd.c_str());
+    printf("running cmd: %s\n", cmd.c_str());
     if (ret == -1) {
         perror("system() failed");
         return -1;
@@ -50,7 +51,14 @@ CanDevice::CanDevice(const char *can_device_name, int can_bitrate)
     can_bitrate_ = can_bitrate;
     std::cout << "CanDevice::CanDevice() can_device_name: " << can_device_name_ << std::endl;
     std::cout << "CanDevice::CanDevice() can_bitrate: " << can_bitrate_ << std::endl;
-    std::strcpy(ifr.ifr_name, can_device_name);
+    if(this->init()) {
+        std::cout << "CanDevice::CanDevice() init success" << std::endl;
+    } else {
+        std::cout << "CanDevice::CanDevice() init failed" << std::endl;
+    }
+
+    
+    strcpy(ifr.ifr_name, can_device_name);
     socket_ = socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (socket_ < 0) {
         perror("socket PF_CAN failed");
@@ -60,13 +68,12 @@ CanDevice::CanDevice(const char *can_device_name, int can_bitrate)
         perror("ioctl failed");
         exit(EXIT_FAILURE);
     }
-    addr.can_family = AF_CAN;
+    addr.can_family = PF_CAN;
     addr.can_ifindex = ifr.ifr_ifindex;
     if (bind(socket_, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
-    set_bitrate(can_bitrate);
 }
 
 CanDevice::~CanDevice()
@@ -82,7 +89,7 @@ bool CanDevice::set_can_iface(bool value)
         can_iface_mode = "up";
     } 
     std::string cmd = get_privileged_cmd(get_cmdline("ifconfig", can_device_name_.c_str(), can_iface_mode, nullptr));
-    int ret = system(cmd.c_str());
+    int ret = exec_cmd(cmd.c_str());
     if (ret == -1) {
         perror("system() failed");
         return false;
@@ -93,14 +100,13 @@ bool CanDevice::set_can_iface(bool value)
 
 bool CanDevice::init()
 {
-    set_can_iface(false);
     set_bitrate(can_bitrate_);
-    set_can_iface(true);
     return true;
 }
 
 bool CanDevice::send_can_frame(can_frame *frame)
 {
+    printf("CanDevice::send_can_frame() frame: %x %lx \n", frame->can_id, (*(long int*)frame->data));
     int nbytes = write(socket_, frame, sizeof(*frame));
     if (nbytes != sizeof(*frame)) {
         perror("Send Error frame[0]!");
