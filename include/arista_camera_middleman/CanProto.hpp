@@ -6,6 +6,89 @@
 
 namespace arista_camera_middleman
 {
+    using AngleCmd_t = uint16_t;
+    using Angle_t = double;
+
+template <typename T_in,typename T_out,bool en_map_store>
+struct _MapStore {
+    T_in min_in,max_in;
+    T_out min_out,max_out;
+    inline _MapStore(T_in _min_i,T_in _max_i,T_out _min_o,T_out _max_o){
+        if(_min_i<=_max_i){
+            min_in = _min_i;
+            min_out = _min_o;
+            if(en_map_store){
+            max_in = _max_i;
+            max_out = _max_o;
+        }
+        } else {
+            min_in = _max_i;
+            min_out = _max_o;
+            if(en_map_store){
+                max_in = _min_i;
+                max_out = _min_o;
+            }
+        }
+        
+    }
+};
+
+template <typename T_in,typename T_out>
+struct _MapStore<T_in, T_out,false> { 
+    T_in min_in;
+    T_out min_out;
+    inline _MapStore(T_in _min_i,T_out _min_o){
+        min_in = _min_i;
+        min_out = _min_o;
+    }
+};
+template <typename T>
+T safe_div(T num,T denom,T def){
+    if(denom!=0.0) return num/denom;
+    else return def;
+};
+
+template <typename T_in,typename T_out,typename mul_T,bool clamp2edge>
+struct LinearMapper
+{
+    inline LinearMapper(T_in min_input,T_in max_input,T_out min_output,T_out max_output):
+    multiplier(safe_div<mul_T>(max_output-min_output,max_input-min_input,0.0)),
+    _store(min_input,max_input,min_output,max_output)
+    {};
+    inline T_out get(T_in input) const {
+        if(input<=_store.min_in) return _store.min_out;
+        if(input>=_store.max_in) return _store.max_out;
+        
+        return (input - _store.min_in)*(multiplier) + _store.min_out;
+    }
+    private:
+    const _MapStore<T_in,T_out,clamp2edge> _store;
+    const mul_T multiplier;
+};
+
+template <typename T_in,typename T_out,typename mul_T>
+struct LinearMapper<T_in,T_out,mul_T,false>
+{
+    inline LinearMapper(T_in min_input,T_in max_input,T_out min_output,T_out max_output):
+    multiplier(mul_T((max_output-min_output))/mul_T((max_input-min_input))),
+    _store(min_input,min_output)
+    {};
+    inline T_out get(T_in input) const {
+        return ((input - _store.min_in)*multiplier) + _store.min_out;
+    }
+    private:
+    const _MapStore<T_in,T_out,false> _store;
+    const mul_T multiplier;
+};
+
+
+using Angle2CmdMapper = LinearMapper<Angle_t, AngleCmd_t, double, true>;
+using Cmd2AngleMapper = LinearMapper<AngleCmd_t, Angle_t, double, true>;
+
+const arista_camera_middleman::Angle2CmdMapper angle2cmd_mapper(0.0, 360.0, 0, 0x10000U);
+const arista_camera_middleman::Cmd2AngleMapper cmd2angle_mapper(0, 0x10000U, 0.0, 360.0);
+
+
 namespace protocol
 {
 
@@ -46,6 +129,9 @@ enum class gimbal_tx_pkt_t {
 } ;
 
 constexpr uint8_t MAX_PAYLOAD_SIZE = 8;
+
+
+
 // struct payload_identifer_t
 // {
 //     uint8_t function_id;
@@ -177,6 +263,14 @@ struct TxData_t{
     void setCallibrationStatus(){
         function_id = FunctionId::CALLIBRATION_STATUS;    
     }
+    void setCallibrationCmd(){
+        function_id = FunctionId::CALLIBRATION_CMD;
+    }
+    void setControlData(uint16_t pan_mapped, uint16_t tilt_mapped){
+        function_id = FunctionId::ANGLE_PKT;
+        data.angle.pan_position = pan_mapped;
+        data.angle.tilt_position = tilt_mapped;
+    }
     canid_t get_can_id()const{
         canid_t can_id_data;
         uint8_t* can_data_buff = (uint8_t* )&can_id_data;
@@ -218,18 +312,26 @@ struct TxData_t{
                 // data.callibration.tilt_config.home_position = convert_gimbal_pos_mapped_to_angle(tilt_home);
                 break;
             }
+        case FunctionId::CALLIBRATION_CMD:
+            {
+                break;
+            }
+        case FunctionId::ANGLE_PKT:
+            {
+                uint16_t * data_buff = (uint16_t*)frame.data;
+                data_buff[1] = data.angle.pan_position;
+                data_buff[3] = data.angle.tilt_position;
+                break;
+            }
+        default:
+            {
+                break;
+            }
         }
         return frame;
     }
 };
 
-gimbal_position_t convert_gimbal_pos_mapped_to_angle(gimbal_pos_mapped_t pos_mapped){
-    return static_cast<gimbal_position_t>((pos_mapped*MAX_ANGLE) / MAX_POS_MAPPED);
-}
-
-gimbal_pos_mapped_t convert_gimbal_angle_to_pos_mapped(gimbal_position_t angle){
-    return static_cast<gimbal_pos_mapped_t>((angle*MAX_POS_MAPPED) / MAX_ANGLE);
-}
 
 
 RxData_t::FunctionId get_function_id(const canid_t& can_id_data){
@@ -253,17 +355,17 @@ RxData_t::FunctionId get_rx_data(const can_frame& can_data, RxData_t::Data& data
                 } else {
                     const uint16_t *mapped_pos_buff =  (const uint16_t*)can_data.data;
                     gimbal_pos_mapped_t pan_range;
-                    memcpy(&pan_range, mapped_pos_buff+0, sizeof(pan_range));
+                    memcpy(&pan_range, mapped_pos_buff+1, sizeof(pan_range));
                     gimbal_pos_mapped_t tilt_range;
-                    memcpy(&tilt_range, mapped_pos_buff+1, sizeof(tilt_range));
-                    data.callibration.pan_config.range = convert_gimbal_pos_mapped_to_angle(pan_range);
-                    data.callibration.tilt_config.range = convert_gimbal_pos_mapped_to_angle(tilt_range);
+                    memcpy(&tilt_range, mapped_pos_buff+3, sizeof(tilt_range));
+                    data.callibration.pan_config.range = cmd2angle_mapper.get(pan_range);
+                    data.callibration.tilt_config.range = cmd2angle_mapper.get(tilt_range);
                     gimbal_pos_mapped_t pan_home;
-                    memcpy(&pan_home, mapped_pos_buff+2, sizeof(pan_home));
+                    memcpy(&pan_home, mapped_pos_buff+0, sizeof(pan_home));
                     gimbal_pos_mapped_t tilt_home;
-                    memcpy(&tilt_home, mapped_pos_buff+3, sizeof(tilt_home));
-                    data.callibration.pan_config.home_position = convert_gimbal_pos_mapped_to_angle(pan_home);
-                    data.callibration.tilt_config.home_position = convert_gimbal_pos_mapped_to_angle(tilt_home);
+                    memcpy(&tilt_home, mapped_pos_buff+2, sizeof(tilt_home));
+                    data.callibration.pan_config.home_position = cmd2angle_mapper.get(pan_home);
+                    data.callibration.tilt_config.home_position = cmd2angle_mapper.get(tilt_home);
                     data.callibration.status = true;
                 }
                 

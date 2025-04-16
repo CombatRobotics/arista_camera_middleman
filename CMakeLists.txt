@@ -14,13 +14,9 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(arista_interfaces REQUIRED)
 
-add_executable(can_comm src/test_handshake.cpp src/CanDevice.cpp)
-target_include_directories(can_comm PUBLIC
-  ${rclcpp_INCLUDE_DIRS}
-  include
-)
-ament_target_dependencies(can_comm rclcpp std_msgs)
 
 # Add the test_handshake executable
 add_executable(test_handshake src/test_handshake.cpp src/CanDevice.cpp)
@@ -29,7 +25,9 @@ target_include_directories(test_handshake PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 ament_target_dependencies(test_handshake
-  "rclcpp"
+  "rclcpp" 
+  "std_msgs"
+  "arista_interfaces"
 )
 
 add_executable(focuser_test src/test_focus.cpp)
@@ -59,7 +57,7 @@ target_link_libraries(auto_focus_node ${OpenCV_LIBS})
 
 
 # Install the executable
-install(TARGETS can_comm test_handshake rpicam_test focuser_test 
+install(TARGETS test_handshake rpicam_test focuser_test 
   auto_focus_node
     DESTINATION lib/${PROJECT_NAME})
 
