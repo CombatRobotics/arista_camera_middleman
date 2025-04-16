@@ -119,6 +119,7 @@ int CanDevice::receive_can_frame(can_frame *frame)
 {
     int nbytes = read(socket_, frame, sizeof(*frame));
     if (nbytes > 0) {
+        printf("CanDevice::receive_can_frame() frame: %x %lx \n", frame->can_id, (*(long int*)frame->data));
         return nbytes;
     } else {
         perror("Receive Error frame[0]!");
@@ -129,7 +130,8 @@ int CanDevice::receive_can_frame(can_frame *frame)
 bool CanDevice::set_filter(std::vector<uint32_t> can_ids)
 {
     if (can_ids.empty()) {
-        return clear_filter();
+        // return clear_filter();
+        return true;
     }
     
     struct can_filter *rfilter = new struct can_filter[can_ids.size()];
@@ -150,14 +152,14 @@ bool CanDevice::set_filter(std::vector<uint32_t> can_ids)
     return true;
 }
 
-bool CanDevice::clear_filter()
-{
-    if (setsockopt(socket_, SOL_CAN_RAW, CAN_RAW_FILTER, NULL, 0) < 0) {
-        perror("setsockopt failed");
-        return false;
-    }
-    return true;
-}
+// bool CanDevice::clear_filter()
+// {
+//     if (setsockopt(socket_, SOL_CAN_RAW, CAN_RAW_FILTER, NULL, 0) < 0) {
+//         perror("setsockopt failed");
+//         return false;
+//     }
+//     return true;
+// }
 
 bool CanDevice::set_bitrate(uint32_t can_bitrate)
 {

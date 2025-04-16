@@ -20,7 +20,7 @@ public:
     bool send_can_frame(struct can_frame *frame);
     int receive_can_frame(struct can_frame *frame);
     bool set_filter(std::vector<uint32_t> can_ids);
-    bool clear_filter();
+    // bool clear_filter();
     bool set_bitrate(uint32_t can_bitrate);
     bool set_can_iface(bool value);
     inline int get_socket_fd() const { return socket_; }

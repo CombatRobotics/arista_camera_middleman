@@ -10,8 +10,8 @@ namespace protocol
 {
 
 enum class device_id_t {
-    CAMERA = 0x13,
-    GIMBAL = 0x23,
+    GIMBAL = 0x13,
+    TURRET = 0x23,
 };
 
 enum class payload_type_t {
@@ -104,6 +104,7 @@ struct RxData_t{
         struct Callibration{
             gimbal_axis_config_t pan_config;
             gimbal_axis_config_t tilt_config;
+            bool status;
         } callibration;
         struct Alive{
             bool status;
@@ -122,7 +123,7 @@ struct RxData_t{
 
 struct TxData_t{
     enum class FunctionId {
-        BROADCAST = 0x24,
+        BROADCAST               = 0x24,
         HEARTBEAT_PKT           = 0x25,
         INCREMENTAL_PKT         = 0x26,
         ANGLE_PKT               = 0x27,
@@ -131,7 +132,7 @@ struct TxData_t{
         SPEED_MODE_PKT          = 0x30,
         CALLIBRATION_CMD        = 0x31,
         WHO_DIS_PKT             = 0x32,
-        callibration     = 0x36,
+        CALLIBRATION_STATUS     = 0x36,
     } function_id;
     union Data {
         struct BroadcastKey{
@@ -174,7 +175,7 @@ struct TxData_t{
         function_id = FunctionId::WHO_DIS_PKT;
     }
     void setCallibrationStatus(){
-        function_id = FunctionId::callibration;    
+        function_id = FunctionId::CALLIBRATION_STATUS;    
     }
     canid_t get_can_id()const{
         canid_t can_id_data;
@@ -201,7 +202,7 @@ struct TxData_t{
             {
                 break;
             }
-        case FunctionId::callibration:
+        case FunctionId::CALLIBRATION_STATUS:
             {
                 // gimbal_pos_mapped_t pan_range;
                 // memcpy(&pan_range, &data.callibration.pan_config.range, sizeof(data.callibration.pan_config.range));
@@ -237,43 +238,58 @@ RxData_t::FunctionId get_function_id(const canid_t& can_id_data){
 }
 RxData_t::FunctionId get_rx_data(const can_frame& can_data, RxData_t::Data& data){
     RxData_t::FunctionId function_id = get_function_id(can_data.can_id);
+    printf("FNID : %x\n",function_id);
     switch(function_id){
         case RxData_t::FunctionId::BROADCAST_ACK:
             {
                 data.broadcast.status = static_cast<payload_type_t>(can_data.data[0]);
-                return function_id;
+                break;
             }
         case RxData_t::FunctionId::CALLIBRATION_ACK:
-            {
-                gimbal_pos_mapped_t pan_range;
-                memcpy(&pan_range, &data.callibration.pan_config.range, sizeof(data.callibration.pan_config.range));
-                gimbal_pos_mapped_t tilt_range;
-                memcpy(&tilt_range, &data.callibration.tilt_config.range, sizeof(data.callibration.tilt_config.range));
-                data.callibration.pan_config.range = convert_gimbal_pos_mapped_to_angle(pan_range);
-                data.callibration.tilt_config.range = convert_gimbal_pos_mapped_to_angle(tilt_range);
-                gimbal_pos_mapped_t pan_home;
-                memcpy(&pan_home, &data.callibration.pan_config.home_position, sizeof(data.callibration.pan_config.home_position));
-                gimbal_pos_mapped_t tilt_home;
-                memcpy(&tilt_home, &data.callibration.tilt_config.home_position, sizeof(data.callibration.tilt_config.home_position));
-                data.callibration.pan_config.home_position = convert_gimbal_pos_mapped_to_angle(pan_home);
-                data.callibration.tilt_config.home_position = convert_gimbal_pos_mapped_to_angle(tilt_home);
+            {   
+                const uint64_t *can_data_buff = (const uint64_t*)can_data.data;
+                if(*can_data_buff == 0){
+                    data.callibration.status = false;
+                } else {
+                    const uint16_t *mapped_pos_buff =  (const uint16_t*)can_data.data;
+                    gimbal_pos_mapped_t pan_range;
+                    memcpy(&pan_range, mapped_pos_buff+0, sizeof(pan_range));
+                    gimbal_pos_mapped_t tilt_range;
+                    memcpy(&tilt_range, mapped_pos_buff+1, sizeof(tilt_range));
+                    data.callibration.pan_config.range = convert_gimbal_pos_mapped_to_angle(pan_range);
+                    data.callibration.tilt_config.range = convert_gimbal_pos_mapped_to_angle(tilt_range);
+                    gimbal_pos_mapped_t pan_home;
+                    memcpy(&pan_home, mapped_pos_buff+2, sizeof(pan_home));
+                    gimbal_pos_mapped_t tilt_home;
+                    memcpy(&tilt_home, mapped_pos_buff+3, sizeof(tilt_home));
+                    data.callibration.pan_config.home_position = convert_gimbal_pos_mapped_to_angle(pan_home);
+                    data.callibration.tilt_config.home_position = convert_gimbal_pos_mapped_to_angle(tilt_home);
+                    data.callibration.status = true;
+                }
                 
-                return function_id;
+                
+                break;
             }
         case RxData_t::FunctionId::ALIVE_PKT:
             {
                 data.is_alive.status = static_cast<bool>(can_data.data[0]);
-                return function_id;
+                break;
             }
         case RxData_t::FunctionId::FEEBACK_PKT:
             {
 
-                return function_id;
+                break;
+            }
+        case RxData_t::FunctionId::WHO_AM_I_ACK:
+            {
+                memcpy(&data.device_id.device_id,can_data.data,1U);
+                break;
             }
         default:
-            return RxData_t::FunctionId::BROADCAST_ACK;
+            return function_id;
     }
 
+    return function_id;
 };
 //Predefined payloads
 //HOME_POSITION PAYLOAD

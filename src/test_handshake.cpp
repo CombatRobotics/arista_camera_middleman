@@ -42,19 +42,7 @@ int main(int argc, char** argv) {
     const char* can_device = "can0";
     int can_bitrate = 500000;
     arista_camera_middleman::CanDevice can_device_handler(can_device, can_bitrate);
-    const int _s = can_device_handler.get_socket_fd();
-    setsockopt(_s, SOL_CAN_RAW, CAN_RAW_FILTER, NULL, 0);
-    can_frame frame; //
-    while(1) {
-        int nbytes = read(_s, &frame, sizeof(frame));
-        if(nbytes > 0) {
-            printf("can_id = 0x%X\r\ncan_dlc = %d \r\n", frame.can_id, frame.can_dlc);
-            int i = 0;
-            for(i = 0; i < 8; i++)
-                printf("data[%d] = %d\r\n", i, frame.data[i]);
-            break;
-        }
-    }
+    
     // // No filter
     // if (!can_device_handler.clear_filter()) {
     //     std::cerr << "Failed to clear CAN filter" << std::endl;
@@ -94,6 +82,7 @@ int main(int argc, char** argv) {
                     arista_camera_middleman::protocol::RxData_t::Data rx_data;
                     arista_camera_middleman::protocol::RxData_t::FunctionId function_id;
                     function_id = arista_camera_middleman::protocol::get_rx_data(can_data, rx_data);
+                    printf("FNID recieved : %x\n",function_id);
                     if (function_id == arista_camera_middleman::protocol::RxData_t::FunctionId::BROADCAST_ACK) {
                         state = CanCommStates::ACK_RECVD;
                     }
@@ -129,6 +118,18 @@ int main(int argc, char** argv) {
                     arista_camera_middleman::protocol::RxData_t::FunctionId function_id;
                     function_id = arista_camera_middleman::protocol::get_rx_data(can_data, rx_data);
                     if (function_id == arista_camera_middleman::protocol::RxData_t::FunctionId::WHO_AM_I_ACK) {
+                        std::cout << "Received WHO_AM_I_ACK" << std::endl;
+                        if (rx_data.device_id.device_id == arista_camera_middleman::protocol::device_id_t::GIMBAL)
+                        {
+                            std::cout << "Identified as gimbal" << std::endl;
+                        } else if (rx_data.device_id.device_id == arista_camera_middleman::protocol::device_id_t::TURRET) {
+                            std::cout << "Identified as turret" << std::endl;
+                        } else {
+                            std::cout << "Identified as unknown" << std::endl;
+                            state = CanCommStates::ERROR;
+                            break;
+                        }
+                        
                         state = CanCommStates::IDENTIFIED;
                     }
                     else {
@@ -162,7 +163,14 @@ int main(int argc, char** argv) {
                     arista_camera_middleman::protocol::RxData_t::FunctionId function_id;
                     function_id = arista_camera_middleman::protocol::get_rx_data(can_data, rx_data);
                     if (function_id == arista_camera_middleman::protocol::RxData_t::FunctionId::CALLIBRATION_ACK) {
-                        state = CanCommStates::CALIBRATION_RECVD;
+                        if(rx_data.callibration.status){
+                            std::cout << "Callibration Completed" << std::endl;
+                            state = CanCommStates::CALIBRATION_RECVD;
+                        } else {
+                            std::cout << "Callibration Failed" << std::endl;
+                            state = CanCommStates::ERROR;
+                            exit(EXIT_FAILURE);
+                        }
                     }
                     else {
                         state = CanCommStates::ERROR;
@@ -172,6 +180,7 @@ int main(int argc, char** argv) {
             case CanCommStates::CALIBRATION_RECVD:
                 // Send CONTROL_MODE
                 {
+
                     std::cout << "Switching to control mode" << std::endl;
                     exit(EXIT_SUCCESS);
                 }
