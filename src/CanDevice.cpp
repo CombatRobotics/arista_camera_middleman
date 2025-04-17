@@ -117,14 +117,20 @@ bool CanDevice::send_can_frame(can_frame *frame)
 
 int CanDevice::receive_can_frame(can_frame *frame)
 {
-    int nbytes = read(socket_, frame, sizeof(*frame));
-    if (nbytes > 0) {
+    int nbytes(0);
+    while (true) {
+        nbytes = read(socket_, frame, sizeof(*frame));
+        if (nbytes < 0) {
+            break;
+        }
         printf("CanDevice::receive_can_frame() frame: %x %lx \n", frame->can_id, (*(long int*)frame->data));
-        return nbytes;
-    } else {
+        if (frame->can_id & CAN_EFF_FLAG) {
+            
+            return nbytes;
+        }
+    }
         perror("Receive Error frame[0]!");
         return -1;
-    }
 }
 
 bool CanDevice::set_filter(std::vector<uint32_t> can_ids)

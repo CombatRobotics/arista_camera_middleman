@@ -56,6 +56,8 @@ struct LinearMapper
     _store(min_input,max_input,min_output,max_output)
     {};
     inline T_out get(T_in input) const {
+        printf("input: %f\n",input);
+
         if(input<=_store.min_in) return _store.min_out;
         if(input>=_store.max_in) return _store.max_out;
         
@@ -82,11 +84,25 @@ struct LinearMapper<T_in,T_out,mul_T,false>
 };
 
 
-using Angle2CmdMapper = LinearMapper<Angle_t, AngleCmd_t, double, true>;
-using Cmd2AngleMapper = LinearMapper<AngleCmd_t, Angle_t, double, true>;
+// using Angle2CmdMapper = LinearMapper<Angle_t, AngleCmd_t, double, true>;
+// using Cmd2AngleMapper = LinearMapper<AngleCmd_t, Angle_t, double, true>;
 
-const arista_camera_middleman::Angle2CmdMapper angle2cmd_mapper(0.0, 360.0, 0, 0x10000U);
-const arista_camera_middleman::Cmd2AngleMapper cmd2angle_mapper(0, 0x10000U, 0.0, 360.0);
+// const arista_camera_middleman::Angle2CmdMapper angle2cmd_mapper(0.0, 360.0, 0, 0x10000U);
+// const arista_camera_middleman::Cmd2AngleMapper cmd2angle_mapper(0U, 0x10000U, 0.0, 360.0);
+
+
+AngleCmd_t angle2cmd(const Angle_t& angle){
+    if(angle < 0.0){
+        return 0;
+    }
+    if (angle> 360.0){
+        return 0x10000U;
+    }
+    return ((angle*(0x10000U))/360.0);
+}
+Angle_t cmd2angle(const AngleCmd_t& angle_cmd){
+    return ((angle_cmd*360.0)/(0x10000U));
+}
 
 
 namespace protocol
@@ -129,8 +145,6 @@ enum class gimbal_tx_pkt_t {
 } ;
 
 constexpr uint8_t MAX_PAYLOAD_SIZE = 8;
-
-
 
 // struct payload_identifer_t
 // {
@@ -318,9 +332,13 @@ struct TxData_t{
             }
         case FunctionId::ANGLE_PKT:
             {
+                // data buff : 0x0000    0x0000      0x0000     0x0000
+                //            [padding]  [pan value] [padding]  [tilt value ] 
                 uint16_t * data_buff = (uint16_t*)frame.data;
-                data_buff[1] = data.angle.pan_position;
-                data_buff[3] = data.angle.tilt_position;
+                
+                // memory clean
+                data_buff[2] = data.angle.pan_position;   
+                data_buff[0] = data.angle.tilt_position; 
                 break;
             }
         default:
@@ -354,18 +372,20 @@ RxData_t::FunctionId get_rx_data(const can_frame& can_data, RxData_t::Data& data
                     data.callibration.status = false;
                 } else {
                     const uint16_t *mapped_pos_buff =  (const uint16_t*)can_data.data;
-                    gimbal_pos_mapped_t pan_range;
-                    memcpy(&pan_range, mapped_pos_buff+1, sizeof(pan_range));
-                    gimbal_pos_mapped_t tilt_range;
-                    memcpy(&tilt_range, mapped_pos_buff+3, sizeof(tilt_range));
-                    data.callibration.pan_config.range = cmd2angle_mapper.get(pan_range);
-                    data.callibration.tilt_config.range = cmd2angle_mapper.get(tilt_range);
+                    gimbal_pos_mapped_t pan_range  = mapped_pos_buff[1];
+                    // memcpy(&pan_range, mapped_pos_buff+1, sizeof(pan_range));
+                    gimbal_pos_mapped_t tilt_range = mapped_pos_buff[3];
+                    // memcpy(&tilt_range, mapped_pos_buff+3, sizeof(tilt_range));
+                    data.callibration.pan_config.range = cmd2angle(pan_range);
+                    data.callibration.tilt_config.range = cmd2angle(tilt_range);
+                    printf("range=P,T : %u,%u:%f,%f\n",pan_range,tilt_range,data.callibration.pan_config.range,data.callibration.tilt_config.range);
                     gimbal_pos_mapped_t pan_home;
                     memcpy(&pan_home, mapped_pos_buff+0, sizeof(pan_home));
                     gimbal_pos_mapped_t tilt_home;
                     memcpy(&tilt_home, mapped_pos_buff+2, sizeof(tilt_home));
-                    data.callibration.pan_config.home_position = cmd2angle_mapper.get(pan_home);
-                    data.callibration.tilt_config.home_position = cmd2angle_mapper.get(tilt_home);
+                    data.callibration.pan_config.home_position = cmd2angle(pan_home);
+                    data.callibration.tilt_config.home_position = cmd2angle(tilt_home);
+                    printf("home=P,T : %u,%u:%f,%f\n",pan_home,tilt_home,data.callibration.pan_config.home_position,data.callibration.tilt_config.home_position);
                     data.callibration.status = true;
                 }
                 
@@ -384,7 +404,9 @@ RxData_t::FunctionId get_rx_data(const can_frame& can_data, RxData_t::Data& data
             }
         case RxData_t::FunctionId::WHO_AM_I_ACK:
             {
-                memcpy(&data.device_id.device_id,can_data.data,1U);
+                data.device_id.device_id = static_cast<device_id_t>(can_data.data[0]);
+                printf("device id recv %d\n",data.device_id.device_id);
+                // print("d")
                 break;
             }
         default:

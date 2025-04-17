@@ -42,6 +42,7 @@ enum class CanCommStates {
 
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
+
     // Register signal handler for graceful shutdown
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
@@ -49,8 +50,6 @@ int main(int argc, char** argv) {
     // Default parameters
     const char* can_device = "can0";
     int can_bitrate = 500000;
-    auto& angle2cmd_mapper = arista_camera_middleman::cmd2angle_mapper;
-    // auto& cmd2angle_mapper = arista_camera_middleman::angle2cmd_mapper;
 
 
     // Initialize CAN interface before creating the handler
@@ -74,7 +73,9 @@ int main(int argc, char** argv) {
 
     while (g_running && rclcpp::ok()) {
         executor.spin_some(loop_rate.period());
-        std::cout << "Current state: " << static_cast<int>(state) << std::endl;
+        if (state!=CanCommStates::CONTROL_MODE){
+            std::cout << "Current state: " << static_cast<int>(state) << std::endl;
+        }
         switch (state) {
 
             case CanCommStates::UNINTIALIZED:
@@ -195,6 +196,8 @@ int main(int argc, char** argv) {
                             range_msg.pitch = rx_data.callibration.tilt_config.range;
                             payload_ctrl_node->set_range(range_msg);
                             payload_ctrl_node->_initialize_ros();
+                            printf("Pan Home: %f, Tilt Home: %f\n", pan_home, tilt_home);
+                            printf("Pan Range: %f, Tilt Range: %f\n", range_msg.yaw, range_msg.pitch);
                             state = CanCommStates::CALIBRATION_RECVD;
                         } else {
                             std::cout << "Callibration Failed, Retrying" << std::endl;
@@ -236,8 +239,8 @@ int main(int argc, char** argv) {
                     }
                     arista_camera_middleman::protocol::TxData_t tx_data;
                     arista_camera_middleman::AngleCmd_t pan_cmd,tilt_cmd;
-                    pan_cmd = angle2cmd_mapper.get(ctrl_msg.yaw);
-                    tilt_cmd = angle2cmd_mapper.get(ctrl_msg.pitch);
+                    pan_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.yaw);
+                    tilt_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.pitch);
                     tx_data.setControlData(pan_cmd,tilt_cmd);
                     can_frame can_data = tx_data.get_can_frame();
                     if (!can_device_handler.send_can_frame(&can_data)) {
