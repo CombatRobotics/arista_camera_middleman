@@ -133,6 +133,43 @@ int CanDevice::receive_can_frame(can_frame *frame)
         return -1;
 }
 
+int CanDevice::recv_can_timeout(can_frame *frame, uint32_t timeout_ms)
+{
+    int nbytes = 0;
+
+    while (true) {
+        fd_set read_fds;
+        timeval timeout;
+
+        FD_ZERO(&read_fds);
+        FD_SET(socket_, &read_fds);
+
+        timeout.tv_sec = timeout_ms / 1000;
+        timeout.tv_usec = (timeout_ms % 1000) * 1000;
+
+        int ret = select(socket_ + 1, &read_fds, nullptr, nullptr, &timeout);
+        if (ret == -1) {
+            perror("select() error");
+            return -1;
+        } else if (ret == 0) {
+            // Timeout occurred
+            return -2;
+        }
+
+        nbytes = read(socket_, frame, sizeof(*frame));
+        if (nbytes < 0) {
+            break;
+        }
+
+        printf("CanDevice::receive_can_frame() frame: %x %lx \n", frame->can_id, (*(long int*)frame->data));
+        if (frame->can_id & CAN_EFF_FLAG) {
+            return nbytes;
+        }
+    }
+
+    perror("Receive Error frame[0]!");
+    return -1;
+}
 bool CanDevice::set_filter(std::vector<uint32_t> can_ids)
 {
     if (can_ids.empty()) {

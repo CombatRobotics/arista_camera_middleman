@@ -19,6 +19,7 @@ public:
     bool init();
     bool send_can_frame(struct can_frame *frame);
     int receive_can_frame(struct can_frame *frame);
+    int recv_can_timeout(can_frame *frame, uint32_t timeout_ms);
     bool set_filter(std::vector<uint32_t> can_ids);
     // bool clear_filter();
     bool set_bitrate(uint32_t can_bitrate);

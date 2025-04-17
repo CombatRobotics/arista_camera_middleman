@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
                     can_frame can_data = tx_data.get_can_frame();
                     if (!can_device_handler.send_can_frame(&can_data)) {
                         std::cerr << "Failed to send CAN frame" << std::endl;
-                        return -1;
+                        break;
                     }
                     state = CanCommStates::BROADCASTED;
                     break;
@@ -96,9 +96,16 @@ int main(int argc, char** argv) {
                 {
                     can_frame can_data;
                     printf("Waiting for ack\n");
-                    if (!can_device_handler.receive_can_frame(&can_data)) {
+                    int ret = can_device_handler.recv_can_timeout(&can_data,30000);
+                    if(ret==-2){
+                        std::cerr << "Timeout" << std::endl;
+                        state = CanCommStates::UNINTIALIZED;
+                        break;
+                    }
+                    if (ret < 0) {
                         std::cerr << "Failed to receive CAN frame" << std::endl;
-                        return -1;
+                        state = CanCommStates::BROADCASTED;
+                        break;
                     }
                     printf("ACK recieved : %x\n",can_data.can_id);
                     arista_camera_middleman::protocol::RxData_t::Data rx_data;
@@ -122,7 +129,8 @@ int main(int argc, char** argv) {
                     can_frame can_data = tx_data.get_can_frame();
                     if (!can_device_handler.send_can_frame(&can_data)) {
                         std::cerr << "Failed to send CAN frame" << std::endl;
-                        return -1;
+                        state = CanCommStates::ACK_RECVD;
+                        break;
                     }
                     state = CanCommStates::WHO_DIS_SENT;
                     break;
@@ -131,9 +139,15 @@ int main(int argc, char** argv) {
                 // Wait for WHO_AM_I
                 {
                     can_frame can_data;
-                    if (!can_device_handler.receive_can_frame(&can_data)) {
+                    int ret = can_device_handler.recv_can_timeout(&can_data,300);
+                    if(ret==-2){
+                        std::cerr << "Timeout" << std::endl;
+                        state = CanCommStates::ACK_RECVD;
+                        break;
+                    }
+                    if (ret < 0) {
                         std::cerr << "Failed to receive CAN frame" << std::endl;
-                        return -1;
+                        state = CanCommStates::ERROR;
                     }
 
                     arista_camera_middleman::protocol::RxData_t::Data rx_data;
@@ -169,7 +183,8 @@ int main(int argc, char** argv) {
                     can_frame can_data = tx_data.get_can_frame();
                     if (!can_device_handler.send_can_frame(&can_data)) {
                         std::cerr << "Failed to send CAN frame" << std::endl;
-                        return -1;
+                        state = CanCommStates::IDENTIFIED;
+                        break;
                     }
                     state = CanCommStates::CALIB_QUERY_SENT;
                     break;
@@ -178,9 +193,16 @@ int main(int argc, char** argv) {
                 // Wait for CALIBRATION_ACK
                 {
                     can_frame can_data;
-                    if (!can_device_handler.receive_can_frame(&can_data)) {
+                    int ret = can_device_handler.recv_can_timeout(&can_data,300);
+                    if (ret == -2) {
+                        std::cerr << "Timeout" << std::endl;
+                        state = CanCommStates::IDENTIFIED;
+                        break;
+                    }
+                    if (ret < 0) {
                         std::cerr << "Failed to receive CAN frame" << std::endl;
-                        return -1;
+                        state = CanCommStates::ERROR;
+                        break;
                     }
 
                     arista_camera_middleman::protocol::RxData_t::Data rx_data;
@@ -199,9 +221,11 @@ int main(int argc, char** argv) {
                             printf("Pan Home: %f, Tilt Home: %f\n", pan_home, tilt_home);
                             printf("Pan Range: %f, Tilt Range: %f\n", range_msg.yaw, range_msg.pitch);
                             state = CanCommStates::CALIBRATION_RECVD;
+                            break;
                         } else {
                             std::cout << "Callibration Failed, Retrying" << std::endl;
                             state = CanCommStates::CALLIBRATION_CMD;
+                            break;
                         }
                     }
                     else {
@@ -217,7 +241,8 @@ int main(int argc, char** argv) {
                     can_frame can_data = tx_data.get_can_frame();
                     if (!can_device_handler.send_can_frame(&can_data)) {
                         std::cerr << "Failed to send CAN frame" << std::endl;
-                        return -1;
+                        state = CanCommStates::CALLIBRATION_CMD;
+                        break;
                     }
                     state = CanCommStates::CALIB_QUERY_SENT;
                     break;
@@ -233,20 +258,30 @@ int main(int argc, char** argv) {
             case CanCommStates::CONTROL_MODE:
                 // Send CONTROL_MODE
                 {   
-                    arista_interfaces::msg::GimbalCtrl ctrl_msg;
-                    if(!payload_ctrl_node->pop_ctrl_cmd(ctrl_msg)){
+                    arista_interfaces::msg::GimbalPos ctrl_msg;
+                    if(payload_ctrl_node->pop_ctrl_cmd(ctrl_msg)){
+                        arista_camera_middleman::protocol::TxData_t tx_data;
+                        arista_camera_middleman::AngleCmd_t pan_cmd,tilt_cmd;
+                        pan_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.yaw);
+                        tilt_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.pitch);
+                        tx_data.setControlData(pan_cmd,tilt_cmd);
+                        can_frame can_data = tx_data.get_can_frame();
+                        if (!can_device_handler.send_can_frame(&can_data)) {
+                            std::cerr << "Failed to send CAN frame" << std::endl;
+                            state = CanCommStates::ERROR;
+                            break;
+                        }
                         break;
                     }
-                    arista_camera_middleman::protocol::TxData_t tx_data;
-                    arista_camera_middleman::AngleCmd_t pan_cmd,tilt_cmd;
-                    pan_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.yaw);
-                    tilt_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.pitch);
-                    tx_data.setControlData(pan_cmd,tilt_cmd);
-                    can_frame can_data = tx_data.get_can_frame();
-                    if (!can_device_handler.send_can_frame(&can_data)) {
-                        std::cerr << "Failed to send CAN frame" << std::endl;
-                        state = CanCommStates::ERROR;
-                        break;
+                    if(payload_ctrl_node->should_trigger()){
+                        arista_camera_middleman::protocol::TxData_t tx_data;
+                        // tx_data.setTrigger();
+                        can_frame can_data = tx_data.get_can_frame();
+                        if (!can_device_handler.send_can_frame(&can_data)) {
+                            std::cerr << "Failed to send CAN frame" << std::endl;
+                            state = CanCommStates::ERROR;
+                            break;
+                        }
                     }
                     break;
                     
