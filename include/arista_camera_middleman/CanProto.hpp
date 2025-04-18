@@ -235,6 +235,7 @@ struct TxData_t{
         CALLIBRATION_CMD        = 0x31,
         WHO_DIS_PKT             = 0x32,
         CALLIBRATION_STATUS     = 0x36,
+        TRIGGER_PKT            = 0x34,
     } function_id;
     union Data {
         struct BroadcastKey{
@@ -270,6 +271,7 @@ struct TxData_t{
             payload_type_t status;
         } callibration;
         struct WhoAmI{} who_am_i;
+        struct Trigger{} trigger;
         struct CallibrationStatus{
         } callibration_status;
     } data;
@@ -290,6 +292,9 @@ struct TxData_t{
         function_id = FunctionId::ANGLE_PKT;
         data.angle.pan_position = pan_mapped;
         data.angle.tilt_position = tilt_mapped;
+    }
+    void setTrigger(){
+        function_id = FunctionId::TRIGGER_PKT;
     }
     void setSpeedData(double pan_speed,double tilt_speed){
         function_id = FunctionId::SPEED_MODE_PKT;
@@ -363,6 +368,11 @@ struct TxData_t{
                 data_buff[2] = data.speed.pitch;
                 frame.data[0] = data.speed.yaw_dir;
                 frame.data[4] = data.speed.pitch_dir;
+                break;
+            }
+            case FunctionId::TRIGGER_PKT:
+            {
+                int16_t * data_buff = (int16_t*)(frame.data);
                 break;
             }
         default:

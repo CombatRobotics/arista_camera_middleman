@@ -13,7 +13,6 @@
 #include <sys/ioctl.h>
 #include "rclcpp/rclcpp.hpp"
 #include "arista_camera_middleman/PayloadCtrl.hpp"
-#include "rclcpp/executors/multi_threaded_executor.hpp"
 
 
 // Global flag for graceful shutdown
@@ -60,8 +59,7 @@ int main(int argc, char** argv) {
     // std::cout << "CAN interface initialized" << std::endl;
     auto payload_ctrl_node = std::make_shared<arista_camera_middleman::PayloadControl>();
     arista_camera_middleman::CanDevice can_device_handler(can_device, can_bitrate);
-    rclcpp::executors::MultiThreadedExecutor executor;
-    executor.add_node(payload_ctrl_node);
+    payload_ctrl_node->_initialize_ros();
     // // No filter
     // if (!can_device_handler.clear_filter()) {
     //     std::cerr << "Failed to clear CAN filter" << std::endl;
@@ -70,9 +68,8 @@ int main(int argc, char** argv) {
     // Start state machine
     CanCommStates state = CanCommStates::UNINTIALIZED;
     rclcpp::Rate loop_rate(100);
-
     while (g_running && rclcpp::ok()) {
-        executor.spin_some(loop_rate.period());
+        loop_rate.sleep();
         if (state!=CanCommStates::CONTROL_MODE){
             std::cout << "Current state: " << static_cast<int>(state) << std::endl;
         }
@@ -259,17 +256,21 @@ int main(int argc, char** argv) {
                 // Send CONTROL_MODE
                 {   
                     arista_interfaces::msg::GimbalPos ctrl_msg;
+                    arista_camera_middleman::protocol::TxData_t tx_data;
                     if(payload_ctrl_node->pop_ctrl_cmd(ctrl_msg)){
-                        arista_camera_middleman::protocol::TxData_t tx_data;
-                        arista_camera_middleman::AngleCmd_t pan_cmd,tilt_cmd;
                         tx_data.setSpeedData(ctrl_msg.yaw,ctrl_msg.pitch);
                         can_frame can_data = tx_data.get_can_frame();
+                        printf("CAN Data: ID = %x, Data = ", can_data.can_id);
+                        for (int i = 0; i < can_data.can_dlc; i++) {
+                            printf("%02X ", can_data.data[i]);
+                        }
+                        printf("\n");
+
                         if (!can_device_handler.send_can_frame(&can_data)) {
                             std::cerr << "Failed to send CAN frame" << std::endl;
                             state = CanCommStates::ERROR;
                             break;
                         }
-                        break;
                         // tx_data.setControlMode();
                         // pan_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.yaw);
                         // tilt_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.pitch);
@@ -284,7 +285,7 @@ int main(int argc, char** argv) {
                     }
                     if(payload_ctrl_node->should_trigger()){
                         arista_camera_middleman::protocol::TxData_t tx_data;
-                        // tx_data.setTrigger();
+                        tx_data.setTrigger();
                         can_frame can_data = tx_data.get_can_frame();
                         if (!can_device_handler.send_can_frame(&can_data)) {
                             std::cerr << "Failed to send CAN frame" << std::endl;
