@@ -216,8 +216,8 @@ int main(int argc, char** argv) {
                             arista_interfaces::msg::GimbalPos range_msg;
                             range_msg.yaw = rx_data.callibration.pan_config.range;
                             range_msg.pitch = rx_data.callibration.tilt_config.range;
-                            payload_ctrl_node->set_range(range_msg);
                             payload_ctrl_node->_initialize_ros();
+                            payload_ctrl_node->set_range(range_msg);
                             printf("Pan Home: %f, Tilt Home: %f\n", pan_home, tilt_home);
                             printf("Pan Range: %f, Tilt Range: %f\n", range_msg.yaw, range_msg.pitch);
                             state = CanCommStates::CALIBRATION_RECVD;
@@ -262,9 +262,7 @@ int main(int argc, char** argv) {
                     if(payload_ctrl_node->pop_ctrl_cmd(ctrl_msg)){
                         arista_camera_middleman::protocol::TxData_t tx_data;
                         arista_camera_middleman::AngleCmd_t pan_cmd,tilt_cmd;
-                        pan_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.yaw);
-                        tilt_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.pitch);
-                        tx_data.setControlData(pan_cmd,tilt_cmd);
+                        tx_data.setSpeedData(ctrl_msg.yaw,ctrl_msg.pitch);
                         can_frame can_data = tx_data.get_can_frame();
                         if (!can_device_handler.send_can_frame(&can_data)) {
                             std::cerr << "Failed to send CAN frame" << std::endl;
@@ -272,6 +270,17 @@ int main(int argc, char** argv) {
                             break;
                         }
                         break;
+                        // tx_data.setControlMode();
+                        // pan_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.yaw);
+                        // tilt_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.pitch);
+                        // tx_data.setControlData(pan_cmd,tilt_cmd);
+                        // can_frame can_data = tx_data.get_can_frame();
+                        // if (!can_device_handler.send_can_frame(&can_data)) {
+                        //     std::cerr << "Failed to send CAN frame" << std::endl;
+                        //     state = CanCommStates::ERROR;
+                        //     break;
+                        // }
+                        // break;
                     }
                     if(payload_ctrl_node->should_trigger()){
                         arista_camera_middleman::protocol::TxData_t tx_data;

@@ -158,6 +158,8 @@ constexpr uint8_t MAX_PAYLOAD_SIZE = 8;
 // };
 
 using angle_t = double;
+using gimbal_speed_t = angle_t;
+using gimbal_rpm_t = uint16_t; 
 using gimbal_position_t = angle_t;
 using gimbal_pos_mapped_t = uint16_t;
 
@@ -251,6 +253,10 @@ struct TxData_t{
             gimbal_position_t pan_position;
             gimbal_position_t tilt_position;
         } angle;
+        struct Speed{
+            gimbal_rpm_t yaw,pitch;
+            uint8_t yaw_dir,pitch_dir;
+        } speed;
         struct FeedbackRequest{
             payload_type_t status;
         } feedback_request;
@@ -284,6 +290,14 @@ struct TxData_t{
         function_id = FunctionId::ANGLE_PKT;
         data.angle.pan_position = pan_mapped;
         data.angle.tilt_position = tilt_mapped;
+    }
+    void setSpeedData(double pan_speed,double tilt_speed){
+        function_id = FunctionId::SPEED_MODE_PKT;
+        data.speed.yaw = abs(pan_speed)*4000;
+        data.speed.pitch = abs(tilt_speed)*4000;
+        data.speed.yaw_dir = ( (pan_speed > 0) ? 1 : 0 );
+        data.speed.pitch_dir = ( (tilt_speed > 0) ? 1 : 0 );
+        printf("speed=P,T: %d,%d::%lf,%lf\n",data.speed.yaw,data.speed.pitch,pan_speed,tilt_speed);
     }
     canid_t get_can_id()const{
         canid_t can_id_data;
@@ -338,7 +352,17 @@ struct TxData_t{
                 
                 // memory clean
                 data_buff[2] = data.angle.pan_position;   
-                data_buff[0] = data.angle.tilt_position; 
+                data_buff[0] = data.angle.tilt_position;
+                break;
+            }
+            case FunctionId::SPEED_MODE_PKT:
+            {
+                int16_t * data_buff = (int16_t*)(frame.data+1);
+                
+                data_buff[0] = data.speed.yaw;   
+                data_buff[2] = data.speed.pitch;
+                frame.data[0] = data.speed.yaw_dir;
+                frame.data[4] = data.speed.pitch_dir;
                 break;
             }
         default:
@@ -379,10 +403,8 @@ RxData_t::FunctionId get_rx_data(const can_frame& can_data, RxData_t::Data& data
                     data.callibration.pan_config.range = cmd2angle(pan_range);
                     data.callibration.tilt_config.range = cmd2angle(tilt_range);
                     printf("range=P,T : %u,%u:%f,%f\n",pan_range,tilt_range,data.callibration.pan_config.range,data.callibration.tilt_config.range);
-                    gimbal_pos_mapped_t pan_home;
-                    memcpy(&pan_home, mapped_pos_buff+0, sizeof(pan_home));
-                    gimbal_pos_mapped_t tilt_home;
-                    memcpy(&tilt_home, mapped_pos_buff+2, sizeof(tilt_home));
+                    gimbal_pos_mapped_t pan_home = mapped_pos_buff[0];
+                    gimbal_pos_mapped_t tilt_home = mapped_pos_buff[2];
                     data.callibration.pan_config.home_position = cmd2angle(pan_home);
                     data.callibration.tilt_config.home_position = cmd2angle(tilt_home);
                     printf("home=P,T : %u,%u:%f,%f\n",pan_home,tilt_home,data.callibration.pan_config.home_position,data.callibration.tilt_config.home_position);

@@ -93,16 +93,16 @@ namespace arista_camera_middleman {
         private:
         void gimbal_ctrl_callback(const GimbalPos::SharedPtr msg){
             GimbalPos msg_copy = *msg;
-            if((msg->yaw)>(payload_range.yaw)){
-                msg_copy.yaw = payload_range.yaw;
-            } else if ((msg->yaw)<(0)){
-                msg_copy.yaw = 0;
-            }
-            if((msg->pitch)>(payload_range.pitch)){
-                msg_copy.pitch = payload_range.pitch;
-            } else if ((msg->pitch)<(0)){
-                msg_copy.pitch = 0;
-            }
+            // if((msg->yaw)>(payload_range.yaw)){
+            //     msg_copy.yaw = payload_range.yaw;
+            // } else if ((msg->yaw)<(0)){
+            //     msg_copy.yaw = 0;
+            // }
+            // if((msg->pitch)>(payload_range.pitch)){
+            //     msg_copy.pitch = payload_range.pitch;
+            // } else if ((msg->pitch)<(0)){
+            //     msg_copy.pitch = 0;
+            // }
             cb_queue.push(*msg);
         }
         void turret_ctrl_callback(const std_msgs::msg::UInt32::SharedPtr msg){
