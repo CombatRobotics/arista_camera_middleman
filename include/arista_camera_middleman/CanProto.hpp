@@ -298,8 +298,8 @@ struct TxData_t{
     }
     void setSpeedData(double pan_speed,double tilt_speed){
         function_id = FunctionId::SPEED_MODE_PKT;
-        data.speed.yaw = abs(pan_speed)*4000;
-        data.speed.pitch = abs(tilt_speed)*4000;
+        data.speed.yaw = static_cast<gimbal_rpm_t>(abs(pan_speed));
+        data.speed.pitch = static_cast<gimbal_rpm_t>(abs(tilt_speed));
         data.speed.yaw_dir = ( (pan_speed > 0) ? 1 : 0 );
         data.speed.pitch_dir = ( (tilt_speed > 0) ? 1 : 0 );
         printf("speed=P,T: %d,%d::%lf,%lf\n",data.speed.yaw,data.speed.pitch,pan_speed,tilt_speed);
