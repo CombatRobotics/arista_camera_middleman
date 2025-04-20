@@ -296,6 +296,9 @@ struct TxData_t{
     void setTrigger(){
         function_id = FunctionId::TRIGGER_PKT;
     }
+    void setHeartBeat(){
+        function_id = FunctionId::HEARTBEAT_PKT;
+    }
     void setSpeedData(double pan_speed,double tilt_speed){
         function_id = FunctionId::SPEED_MODE_PKT;
         data.speed.yaw = static_cast<gimbal_rpm_t>(abs(pan_speed));
@@ -371,6 +374,11 @@ struct TxData_t{
                 break;
             }
             case FunctionId::TRIGGER_PKT:
+            {
+                int16_t * data_buff = (int16_t*)(frame.data);
+                break;
+            }
+            case FunctionId::HEARTBEAT_PKT:
             {
                 int16_t * data_buff = (int16_t*)(frame.data);
                 break;

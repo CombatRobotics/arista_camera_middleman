@@ -68,6 +68,8 @@ int main(int argc, char** argv) {
     // Start state machine
     CanCommStates state = CanCommStates::UNINTIALIZED;
     rclcpp::Rate loop_rate(100);
+    const rclcpp::Duration HbTimeout(3,0);
+    rclcpp::Time last_hb_time;
     while (g_running && rclcpp::ok()) {
         loop_rate.sleep();
         if (state!=CanCommStates::CONTROL_MODE){

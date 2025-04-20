@@ -18,17 +18,30 @@ find_package(std_msgs REQUIRED)
 find_package(arista_interfaces REQUIRED)
 
 
-# Add the test_handshake executable
-add_executable(test_handshake src/test_handshake.cpp src/CanDevice.cpp)
-target_include_directories(test_handshake PUBLIC
+# Add the can_control executable
+add_executable(can_control src/can_control.cpp src/CanDevice.cpp)
+target_include_directories(can_control PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-ament_target_dependencies(test_handshake
+ament_target_dependencies(can_control
   "rclcpp" 
   "std_msgs"
   "arista_interfaces"
 )
+
+
+add_executable(zoom_control src/zoom_control.cpp src/CanDevice.cpp)
+target_include_directories(zoom_control PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(zoom_control
+  "rclcpp" 
+  "std_msgs"
+  "arista_interfaces"
+)
+
 
 add_executable(focuser_test src/test_focus.cpp)
 target_include_directories(focuser_test PUBLIC
@@ -55,10 +68,14 @@ target_include_directories(auto_focus_node PUBLIC
 ament_target_dependencies(auto_focus_node rclcpp sensor_msgs cv_bridge)
 target_link_libraries(auto_focus_node ${OpenCV_LIBS})
 
+# Install the launch folder
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME})
+
 
 # Install the executable
-install(TARGETS test_handshake rpicam_test focuser_test 
-  auto_focus_node
+install(TARGETS can_control rpicam_test focuser_test 
+  auto_focus_node zoom_control
     DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
