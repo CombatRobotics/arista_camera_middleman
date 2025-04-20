@@ -8,10 +8,11 @@ import subprocess
 import platform
 import subprocess
 import re
+import time
 import statistics
 import rclpy
 from rclpy.qos import QoSProfile, DurabilityPolicy
-
+from rclpy.node import Node as rclNode
 def ping_host(host, count=4):
     # Determine OS-specific ping parameters
     param = '-n' if platform.system().lower() == 'windows' else '-c'
@@ -31,7 +32,7 @@ def ping_host(host, count=4):
         return -2
 
 
-class MiddlemanNode(rclpy.Node):
+class MiddlemanNode(rclNode):
     def __init__(self):
         super().__init__('middleman_node')
         qos_profile = QoSProfile(
@@ -57,8 +58,9 @@ def get_robot_config():
             if len(node.robots) > 0:
                 start_time = node.get_clock().now()
         else:
-            if (node.get_clock().now().to_msg().sec - start_time.sec) > 5:
+            if (node.get_clock().now().to_msg().sec - start_time.to_msg().sec) > 5:
                 break
+        time.sleep(1)
     min_ping = None
     probable_robot = None
     for name, robot in node.robots.items():
@@ -69,19 +71,65 @@ def get_robot_config():
                 probable_robot = robot
     return probable_robot
 
-def mak_launch_desc(robot_conf:AvailableRobot):
+def make_launch_desc(robot_conf:AvailableRobot):
     ip = robot_conf.robot_ip
     namespace = robot_conf.robot_name
-    print(robot_conf)
+    can_control_node = Node(
+        package='arista_camera_middleman',
+        executable='can_control',
+        name='can_control',
+        namespace=namespace,
+        output='screen',
+        respawn=True
+    )
+    zoom_control_node = Node(
+        package='arista_camera_middleman',
+        executable='zoom_control',
+        name='zoom_control',
+        namespace=namespace,
+        output='screen',
+        respawn=True
+    )
+    thermal_cam_stream = Node(
+        package='arista_video_stream',
+        executable='rpicam_stream.py',
+        name='thermal_cam_stream',
+        namespace=namespace,
+        output='screen',
+        parameters=[{
+            'robot_ip': ip,
+            'camera_id': 'thermal',
+            'port': 5032
+        }],
+        respawn=True
+    )
+    rgb_cam_stream = Node(
+        package='arista_video_stream',
+        executable='rpicam_stream.py',
+        name='rgb_cam_stream',
+        namespace=namespace,
+        output='screen',
+        parameters=[{
+            'robot_ip': ip,
+            'camera_id': 'zoom_rgb',
+            'port': 5035
+        }],
+        respawn=True
+    )
     return launch.LaunchDescription([
-        
+        can_control_node,
+        zoom_control_node,
+        thermal_cam_stream,
+        rgb_cam_stream,
     ])
 
 def generate_launch_description():
+    rclpy.init()
     robot_conf = get_robot_config()
     while robot_conf is None:
         robot_conf = get_robot_config()
-    return mak_launch_desc(robot_conf)
+        time.sleep(3)
+    return make_launch_desc(robot_conf)
 
 # if __name__ == '__main__':
     # generate_launch_description()
