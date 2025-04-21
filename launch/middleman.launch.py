@@ -69,7 +69,10 @@ def get_robot_config():
             if min_ping is None or _ping < min_ping:
                 min_ping = _ping
                 probable_robot = robot
-    return probable_robot
+    if min_ping is not None and min_ping >=0 and min_ping < 1.5:
+        return probable_robot
+    else:
+        return None
 
 def make_launch_desc(robot_conf:AvailableRobot):
     ip = robot_conf.robot_ip
