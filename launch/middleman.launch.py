@@ -11,7 +11,7 @@ import re
 import time
 import statistics
 import rclpy
-from rclpy.qos import QoSProfile, DurabilityPolicy
+from rclpy.qos import QoSProfile, DurabilityPolicy,ReliabiltyPolicy,HistoryPolicy
 from rclpy.node import Node as rclNode
 def ping_host(host, count=4):
     # Determine OS-specific ping parameters
@@ -36,8 +36,12 @@ class MiddlemanNode(rclNode):
     def __init__(self):
         super().__init__('middleman_node')
         qos_profile = QoSProfile(
-            depth=10,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL  # or DurabilityPolicy.VOLATILE
+            # depth=10,
+            # durability=DurabilityPolicy.TRANSIENT_LOCAL  # or DurabilityPolicy.VOLATILE
+            durability=DurabilityPolicy.VOLATILE,
+            reliability=ReliabiltyPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1
         )
         self._publisher = self.create_publisher (Empty, '/request_available_robots', 10)
         self._subscriber = self.create_subscription(AvailableRobot, '/available_robots', self._robot_callback, qos_profile)
