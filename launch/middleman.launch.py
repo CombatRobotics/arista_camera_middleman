@@ -128,10 +128,13 @@ def make_launch_desc(robot_conf:AvailableRobot):
 
 def generate_launch_description():
     rclpy.init()
-    robot_conf = get_robot_config()
-    while robot_conf is None:
-        robot_conf = get_robot_config()
-        time.sleep(3)
+    robot_conf = AvailableRobot()
+    robot_conf.robot_ip = '192.168.1.9'
+    robot_conf.robot_name = 'arista4'
+    #robot_conf = get_robot_config()
+    #while robot_conf is None:
+    #    robot_conf = get_robot_config()
+    #    time.sleep(3)
     return make_launch_desc(robot_conf)
 
 # if __name__ == '__main__':
