@@ -11,7 +11,7 @@ import re
 import time
 import statistics
 import rclpy
-from rclpy.qos import QoSProfile, DurabilityPolicy,ReliabiltyPolicy,HistoryPolicy
+from rclpy.qos import QoSProfile, DurabilityPolicy,ReliabilityPolicy,HistoryPolicy
 from rclpy.node import Node as rclNode
 def ping_host(host, count=4):
     # Determine OS-specific ping parameters
@@ -39,7 +39,7 @@ class MiddlemanNode(rclNode):
             # depth=10,
             # durability=DurabilityPolicy.TRANSIENT_LOCAL  # or DurabilityPolicy.VOLATILE
             durability=DurabilityPolicy.VOLATILE,
-            reliability=ReliabiltyPolicy.BEST_EFFORT,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=1
         )
