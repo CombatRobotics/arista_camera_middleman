@@ -62,9 +62,8 @@ def get_robot_config():
             if len(node.robots) > 0:
                 start_time = node.get_clock().now()
         else:
-            if (node.get_clock().now().to_msg().sec - start_time.to_msg().sec) > 30:
-                if len(node.robots) != 0:
-                    break
+            if (node.get_clock().now().to_msg().sec - start_time.to_msg().sec) > 10:
+                break
         time.sleep(1)
     min_ping = None
     probable_robot = None
