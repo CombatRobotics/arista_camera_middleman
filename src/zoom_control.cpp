@@ -35,7 +35,7 @@ public:
   ZoomPresetSubscriber() : Node("zoom_presets_subscriber"),focuser(RPI_BUS_ID)
   {
     subscription_ = this->create_subscription<std_msgs::msg::Bool>(
-      "preset_idx", 10, [this](const std_msgs::msg::Bool::SharedPtr msg) { this->zoomPresetCallback(msg); });
+      "gimbal/zoom", 10, [this](const std_msgs::msg::Bool::SharedPtr msg) { this->zoomPresetCallback(msg); });
   };
 
 
