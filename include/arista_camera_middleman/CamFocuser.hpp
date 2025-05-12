@@ -54,6 +54,7 @@ public:
 
     Focuser(int bus) {
         devicePath = "/dev/i2c-" + std::to_string(bus);
+        std::cout << "Opening I2C bus: " << devicePath << std::endl;
         file = open(devicePath.c_str(), O_RDWR);
         if (file < 0) {
             perror("Unable to open I2C bus");
