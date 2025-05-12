@@ -89,14 +89,14 @@ def make_launch_desc(robot_conf:AvailableRobot):
         output='screen',
         respawn=True
     )
-    # zoom_control_node = Node(
-    #     package='arista_camera_middleman',
-    #     executable='zoom_control',
-    #     name='zoom_control',
-    #     namespace=namespace,
-    #     output='screen',
-    #     respawn=True
-    # )
+    zoom_control_node = Node(
+        package='arista_camera_middleman',
+        executable='zoom_control',
+        name='zoom_control',
+        namespace=namespace,
+        output='screen',
+        respawn=True
+    )
     thermal_cam_stream = Node(
         package='arista_video_stream',
         executable='rpicam_stream.py',
@@ -125,7 +125,7 @@ def make_launch_desc(robot_conf:AvailableRobot):
     )
     return launch.LaunchDescription([
         can_control_node,
-        zoom_control_node,
+        # zoom_control_node,
         thermal_cam_stream,
         rgb_cam_stream,
     ])
