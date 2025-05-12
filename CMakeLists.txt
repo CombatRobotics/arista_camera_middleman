@@ -26,7 +26,6 @@ target_include_directories(can_control PUBLIC
 ament_target_dependencies(can_control
   "rclcpp" 
   "std_msgs"
-  "arista_interfaces"
 )
 
 
@@ -38,7 +37,6 @@ target_include_directories(zoom_control PUBLIC
 ament_target_dependencies(zoom_control
   "rclcpp" 
   "std_msgs"
-  "arista_interfaces"
 )
 
 
