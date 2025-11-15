@@ -273,6 +273,11 @@ int main(int argc, char** argv) {
                             state = CanCommStates::ERROR;
                             break;
                         }
+
+                        for (int i = 0; i < can_data.can_dlc; i++) {
+                            printf("%02X ", can_data.data[i]);
+                        }
+                        
                         // tx_data.setControlMode();
                         // pan_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.yaw);
                         // tilt_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.pitch);
@@ -285,16 +290,16 @@ int main(int argc, char** argv) {
                         // }
                         // break;
                     }
-                    if(payload_ctrl_node->should_trigger()){
-                        arista_camera_middleman::protocol::TxData_t tx_data;
-                        tx_data.setTrigger();
-                        can_frame can_data = tx_data.get_can_frame();
-                        if (!can_device_handler.send_can_frame(&can_data)) {
-                            std::cerr << "Failed to send CAN frame" << std::endl;
-                            state = CanCommStates::ERROR;
-                            break;
-                        }
-                    }
+                    // if(payload_ctrl_node->should_trigger()){
+                    //     arista_camera_middleman::protocol::TxData_t tx_data;
+                    //     tx_data.setTrigger();
+                    //     can_frame can_data = tx_data.get_can_frame();
+                    //     if (!can_device_handler.send_can_frame(&can_data)) {
+                    //         std::cerr << "Failed to send CAN frame" << std::endl;
+                    //         state = CanCommStates::ERROR;
+                    //         break;
+                    //     }
+                    // }
                     break;
                     
                 }
