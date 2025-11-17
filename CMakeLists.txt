@@ -11,9 +11,6 @@ find_package(ament_cmake REQUIRED)
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(cv_bridge REQUIRED)
-find_package(OpenCV REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(arista_interfaces REQUIRED)
 
@@ -31,51 +28,13 @@ ament_target_dependencies(can_control
 )
 
 
-add_executable(zoom_control src/zoom_control.cpp src/CanDevice.cpp)
-target_include_directories(zoom_control PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-ament_target_dependencies(zoom_control
-  "rclcpp" 
-  "std_msgs"
-  "arista_interfaces"
-)
-
-
-add_executable(focuser_test src/test_focus.cpp)
-target_include_directories(focuser_test PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-target_link_libraries(focuser_test PRIVATE i2c)
-
-add_executable(rpicam_test src/test_rpicamera.cpp)
-target_include_directories(rpicam_test PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-ament_target_dependencies(rpicam_test
-  rclcpp sensor_msgs cv_bridge 
-)
-target_link_libraries(rpicam_test ${OpenCV_LIBS} ) 
-
-add_executable(auto_focus_node src/test_autofocus.cpp)
-target_include_directories(auto_focus_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-ament_target_dependencies(auto_focus_node rclcpp sensor_msgs cv_bridge)
-target_link_libraries(auto_focus_node ${OpenCV_LIBS})
-
 # Install the launch folder
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME})
 
 
 # Install the executable
-install(TARGETS can_control rpicam_test focuser_test 
-  auto_focus_node zoom_control
+install(TARGETS can_control
     DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
