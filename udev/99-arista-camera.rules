@@ -1,0 +1,9 @@
+# Arista camera payload udev rules
+# Thermal camera: Cypress 04b4:00f9 product string TRMR#03SY00014A00001 (index 0 = video stream)
+SUBSYSTEM=="video4linux", KERNEL=="video*", ATTR{index}=="0", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f9", ATTRS{product}=="TRMR#03SY00014A00001", SYMLINK+="thermal_cam", MODE="0660", GROUP="video"
+
+# RGB zoom HARSHCAM: Cypress 04b4:00f9 product string USB3 NeoHD (index 0 = video stream)
+SUBSYSTEM=="video4linux", KERNEL=="video*", ATTR{index}=="0", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f9", ATTRS{product}=="USB3 NeoHD", SYMLINK+="rgb_zoom_harshcam", MODE="0660", GROUP="video"
+
+# USB webcam (Shinetech USB2.0 FHD UVC WebCam)
+SUBSYSTEM=="video4linux", KERNEL=="video*", ATTR{index}=="0", ATTRS{idVendor}=="3277", ATTRS{idProduct}=="0051", ATTRS{name}=="USB2.0 FHD UVC WebCam: USB2.0 F", SYMLINK+="webcam", MODE="0660", GROUP="video"
