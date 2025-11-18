@@ -28,11 +28,6 @@ def generate_launch_description():
     namespace = LaunchConfiguration('namespace')
     robot_ip = LaunchConfiguration('robot_ip')
     preview = LaunchConfiguration('preview')
-    profile_params = os.path.join(
-        get_package_share_directory('arista_video_stream'),
-        'config',
-        'rpicam_stream.yaml',
-    )
 
     can_control_node = Node(
         package='arista_camera_middleman',
@@ -55,11 +50,13 @@ def generate_launch_description():
         namespace=namespace,
         output='screen',
         parameters=[
-            profile_params,
             {
                 'robot_ip': robot_ip,
-                'camera_id': 'thermal',
-                'preview': preview,
+                'port': 5030,
+                'bitrate': 3000,
+                'device': '/dev/thermal_cam',
+                'yuy2_width': 640,
+                'yuy2_height': 480,
             },
         ],
     )
@@ -70,11 +67,13 @@ def generate_launch_description():
         namespace=namespace,
         output='screen',
         parameters=[
-            profile_params,
             {
                 'robot_ip': robot_ip,
-                'camera_id': 'rgb_zoom_harshcam',
-                'preview': preview,
+                'port': 5031,
+                'bitrate': 10000,
+                'device': '/dev/rgb_zoom_harshcam',
+                'yuy2_width': 1920,
+                'yuy2_height': 540,
             },
         ],
     )
@@ -85,11 +84,11 @@ def generate_launch_description():
         namespace=namespace,
         output='screen',
         parameters=[
-            profile_params,
             {
                 'robot_ip': robot_ip,
                 'camera_id': 'webcam',
-                'preview': preview,
+                'yuy2_width': 640,
+                'yuy2_height': 480,
             },
         ],
     )
@@ -111,9 +110,9 @@ def generate_launch_description():
         robot_ip_arg,
         preview_arg,
         # can_control_node,
-        # zoom_control_node,
-        # thermal_cam_stream,
-        webcam_stream,
-        # rgb_cam_stream,
+        zoom_control_node,
+        thermal_cam_stream,
+        # webcam_stream,
+        rgb_cam_stream,
         xbox_controller,
     ])
