@@ -1,2 +1,2 @@
 # Harshcam camera control serial interface (Cypress USB3 NeoHD 04b4:00f9)
-SUBSYSTEM=="tty", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f9", ATTRS{product}=="USB3 NeoHD", SYMLINK+="harshcam_control", MODE="0660", GROUP="dialout"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="00f9", ATTRS{product}=="USB3 NeoHD", SYMLINK+="harshcam_control",  MODE="0666", GROUP="dialout"

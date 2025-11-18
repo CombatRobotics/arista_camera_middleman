@@ -69,8 +69,8 @@ def generate_launch_description():
         parameters=[
             {
                 'robot_ip': robot_ip,
-                'port': 5031,
-                'bitrate': 10000,
+                'port': 5032,
+                'bitrate': 7000,
                 'device': '/dev/rgb_zoom_harshcam',
                 'yuy2_width': 1920,
                 'yuy2_height': 540,
