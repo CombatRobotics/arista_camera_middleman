@@ -70,7 +70,7 @@ def generate_launch_description():
             {
                 'robot_ip': robot_ip,
                 'port': 5032,
-                'bitrate': 7000,
+                'bitrate': 10000,
                 'device': '/dev/rgb_zoom_harshcam',
                 'yuy2_width': 1920,
                 'yuy2_height': 540,
