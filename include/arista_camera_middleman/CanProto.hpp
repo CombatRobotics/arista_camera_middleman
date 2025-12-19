@@ -301,6 +301,8 @@ struct TxData_t{
     }
     void setSpeedData(double pan_speed,double tilt_speed){
         function_id = FunctionId::SPEED_MODE_PKT;
+        // Zero out the union to prevent old broadcast_key data from persisting
+        memset(&data, 0, sizeof(data));
         data.speed.yaw = static_cast<gimbal_rpm_t>(abs(pan_speed));
         data.speed.pitch = static_cast<gimbal_rpm_t>(abs(tilt_speed));
         data.speed.yaw_dir = ( (pan_speed > 0) ? 1 : 0 );
@@ -308,7 +310,7 @@ struct TxData_t{
         printf("speed=P,T: %d,%d::%lf,%lf\n",data.speed.yaw,data.speed.pitch,pan_speed,tilt_speed);
     }
     canid_t get_can_id()const{
-        canid_t can_id_data;
+        canid_t can_id_data = 0;  // Initialize to zero first
         uint8_t* can_data_buff = (uint8_t* )&can_id_data;
         can_data_buff[0] = SENDER_CAN_ID;
         can_data_buff[1] = static_cast<uint8_t>(function_id);
@@ -365,12 +367,34 @@ struct TxData_t{
             }
             case FunctionId::SPEED_MODE_PKT:
             {
+                // Debug: Print union contents before reading
+                printf("DEBUG: Union data as bytes: ");
+                uint8_t* union_bytes = (uint8_t*)&data;
+                for (int i = 0; i < 8; i++) {
+                    printf("%02X ", union_bytes[i]);
+                }
+                printf("\n");
+                printf("DEBUG: data.speed.yaw=%u, data.speed.pitch=%u, yaw_dir=%u, pitch_dir=%u\n", 
+                       data.speed.yaw, data.speed.pitch, data.speed.yaw_dir, data.speed.pitch_dir);
+                printf("DEBUG: Broadcast key check: %lx\n", data.broadcast_key.key);
+                
                 int16_t * data_buff = (int16_t*)(frame.data+1);
+                
+                // frame.data 
+                // | 0  byte | 1 byte    | 2 byte | 3 byte | 4 byte   | 5 byte | 6 byte | 7 byte  | 
+                //   yaw dir |      yaw speed     | padding| pitch dir|    pitch speed  | padding | 
                 
                 data_buff[0] = data.speed.yaw;   
                 data_buff[2] = data.speed.pitch;
                 frame.data[0] = data.speed.yaw_dir;
                 frame.data[4] = data.speed.pitch_dir;
+                
+                // Debug: Print frame data after writing
+                printf("DEBUG: Frame data after write: ");
+                for (int i = 0; i < 8; i++) {
+                    printf("%02X ", frame.data[i]);
+                }
+                printf("\n");
                 break;
             }
             case FunctionId::TRIGGER_PKT:
