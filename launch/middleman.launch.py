@@ -13,6 +13,7 @@ import statistics
 import rclpy
 from rclpy.qos import QoSProfile, DurabilityPolicy,ReliabilityPolicy,HistoryPolicy
 from rclpy.node import Node as rclNode
+
 def ping_host(host, count=4):
     # Determine OS-specific ping parameters
     param = '-n' if platform.system().lower() == 'windows' else '-c'
@@ -42,41 +43,64 @@ class MiddlemanNode(rclNode):
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=1
-        )
-        self._publisher = self.create_publisher (Empty, '/request_available_robots', 10)
+        )\
+        self.declare_parameter('max_latency', 1.5)
+        self.max_latency = self.get_parameter('max_latency').value
+        self._publisher = self.create_publisher(Empty, '/request_available_robots', 10)
         self._subscriber = self.create_subscription(AvailableRobot, '/available_robots', self._robot_callback, qos_profile)
         self.robots = dict()
+        self.selected_robot = None  # Robot with latency < 1ms
         self.get_logger().info('middleman node started')
 
     def _robot_callback(self, msg: AvailableRobot):
+        # Skip if we already found a suitable robot
+        if self.selected_robot is not None:
+            return
+
+        # Skip if we already checked this robot
+        if msg.robot_name in self.robots:
+            return
+
         self.robots[msg.robot_name] = msg
+        self.get_logger().info(f'Discovered robot: {msg.robot_name} at {msg.robot_ip}, pinging...')
+
+        # Ping the robot immediately
+        latency = ping_host(msg.robot_ip, count=2)  # Use fewer pings for faster check
+
+        if latency >= 0:
+            self.get_logger().info(f'Robot {msg.robot_name} latency: {latency:.2f}ms')
+            if latency < self.max_latency:
+                self.get_logger().info(f'Selected robot {msg.robot_name} with latency {latency:.2f}ms < {self.max_latency}ms')
+                self.selected_robot = msg
+        else:
+            self.get_logger().warn(f'Failed to ping robot {msg.robot_name} at {msg.robot_ip}')
 
 def get_robot_config():
     node = MiddlemanNode()
-    start_time = None
+    max_wait_time = 30  # Maximum seconds to wait for a suitable robot
+    start_time = node.get_clock().now()
+
     while True:
         node.get_logger().info('requesting available robots')
         node._publisher.publish(Empty())
         rclpy.spin_once(node, timeout_sec=1)
-        if start_time is None:
-            if len(node.robots) > 0:
-                start_time = node.get_clock().now()
-        else:
-            if (node.get_clock().now().to_msg().sec - start_time.to_msg().sec) > 10:
-                break
-        time.sleep(1)
-    min_ping = None
-    probable_robot = None
-    for name, robot in node.robots.items():
-        _ping = ping_host(robot.robot_ip)
-        if _ping >= 0:
-            if min_ping is None or _ping < min_ping:
-                min_ping = _ping
-                probable_robot = robot
-    if min_ping is not None and min_ping >=0 and min_ping < 1.5:
-        return probable_robot
-    else:
-        return None
+
+        # Check if we found a robot with latency < 1ms
+        if node.selected_robot is not None:
+            node.get_logger().info(f'Using robot: {node.selected_robot.robot_name}')
+            return node.selected_robot
+
+        # Check timeout
+        elapsed = (node.get_clock().now() - start_time).nanoseconds / 1e9
+        if elapsed > max_wait_time:
+            node.get_logger().warn('Timeout waiting for robot with latency < 1ms')
+            break
+
+        time.sleep(0.5)
+
+    # Fallback: if no robot with <1ms latency found, return None
+    node.get_logger().error('No robot found with latency < 1ms')
+    return None
 
 def make_launch_desc(robot_conf:AvailableRobot):
     ip = robot_conf.robot_ip
@@ -118,15 +142,15 @@ def make_launch_desc(robot_conf:AvailableRobot):
         output='screen',
         parameters=[{
             'robot_ip': ip,
-            'camera_id': 'zoom_rgb',
+            'camera_id': '/dev/video0',
             'port': 5035
         }],
-        respawn=True
+        respawn=False
     )
     return launch.LaunchDescription([
-        can_control_node,
-        zoom_control_node,
-        thermal_cam_stream,
+        # can_control_node,
+        # zoom_control_node,
+        # thermal_cam_stream,
         rgb_cam_stream,
     ])
 
