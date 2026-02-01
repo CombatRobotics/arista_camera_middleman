@@ -43,7 +43,7 @@ class MiddlemanNode(rclNode):
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=1
-        )\
+        )
         self.declare_parameter('max_latency', 1.5)
         self.max_latency = self.get_parameter('max_latency').value
         self._publisher = self.create_publisher(Empty, '/request_available_robots', 10)
@@ -142,8 +142,11 @@ def make_launch_desc(robot_conf:AvailableRobot):
         output='screen',
         parameters=[{
             'robot_ip': ip,
-            'camera_id': '/dev/video0',
-            'port': 5035
+            'device': '/dev/video0',
+            'port': 5035,
+            'yuy2_width': 640,
+            'yuy2_height': 480,
+            'local_preview': False  # Set to False to disable local preview window
         }],
         respawn=False
     )
