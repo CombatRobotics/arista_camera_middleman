@@ -5,6 +5,7 @@
 // #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/float64.hpp"
 #include "std_msgs/msg/u_int16.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "arista_interfaces/msg/gimbal_pos.hpp"
 #include <vector>
 #include <queue>
@@ -76,8 +77,17 @@ namespace arista_camera_middleman {
                 "gimbal/trigger", 10,
                 std::bind(&PayloadControl::turret_ctrl_callback, this, std::placeholders::_1)
             );
+            auto_mode_sub = this->create_subscription<std_msgs::msg::Bool>(
+                "gimbal/auto_mode", 10,
+                std::bind(&PayloadControl::auto_mode_callback, this, std::placeholders::_1)
+            );
+            trigger_held_sub = this->create_subscription<std_msgs::msg::Bool>(
+                "gimbal/trigger_held", 10,
+                std::bind(&PayloadControl::trigger_held_callback, this, std::placeholders::_1)
+            );
             max_pose_pub_ = this->create_publisher<GimbalPos>("gimbal/max_pose", 10);
             current_pose_pub_ = this->create_publisher<GimbalPos>("gimbal/current_pose", 10);
+            encoder_pub_ = this->create_publisher<GimbalPos>("gimbal/encoder", 10);
             // timer_ = this->create_wall_timer(
             //     std::chrono::milliseconds(1000), std::bind(&PayloadControl::timer_callback, this));
             executor_.add_node(shared_from_this());
@@ -90,8 +100,11 @@ namespace arista_camera_middleman {
             if(!_initialized_ros) return;
             gimbal_ctrl_sub.reset();
             turret_ctrl_sub.reset();
+            auto_mode_sub.reset();
+            trigger_held_sub.reset();
             max_pose_pub_.reset();
             current_pose_pub_.reset();
+            encoder_pub_.reset();
             timer_.reset();
             // executor_.remove_node(shared_from_this());
             executor_.cancel();
@@ -106,32 +119,80 @@ namespace arista_camera_middleman {
                 } else {
                     return false;
                 }
-            } 
+            }
              return false;
+        }
+
+        bool is_auto_mode(){
+            return _auto_mode_enabled;
+        }
+
+        bool is_trigger_held(){
+            return _trigger_held;
+        }
+
+        bool get_auto_trigger_state(bool& is_firing){
+            if(payload_type == PayloadType::TURRET && _auto_mode_enabled){
+                is_firing = _trigger_held;
+                return true;
+            }
+            return false;
+        }
+
+        void update_pan_encoder(double angle_degrees){
+            encoder_data_.yaw = angle_degrees;
+        }
+
+        void update_tilt_encoder(double angle_degrees){
+            encoder_data_.pitch = angle_degrees;
+        }
+
+        void publish_encoder_data(){
+            if(encoder_pub_){
+                encoder_pub_->publish(encoder_data_);
+            }
+        }
+
+        void set_calibration_limits(double pan_min, double pan_max, double tilt_min, double tilt_max){
+            _yaw_min = pan_min;
+            _yaw_max = pan_max;
+            _pitch_min = tilt_min;
+            _pitch_max = tilt_max;
+            _limits_received = true;
+            printf("Calibration limits set: yaw=[%.2f, %.2f], pitch=[%.2f, %.2f]\n",
+                   _yaw_min, _yaw_max, _pitch_min, _pitch_max);
         }
 
         private:
         void gimbal_ctrl_callback(const GimbalPos::SharedPtr msg){
             GimbalPos msg_copy = *msg;
             if(payload_type==PayloadType::TURRET){
-                msg_copy.yaw*=4000;
-                msg_copy.pitch*=4000;
+                // Check limits if received - block velocity if at limit and trying to go further
+                if(_limits_received){
+                    // Yaw limits
+                    if ((encoder_data_.yaw >= _yaw_max && msg->yaw > 0) ||
+                        (encoder_data_.yaw <= _yaw_min && msg->yaw < 0)) {
+                        msg_copy.yaw = 0;
+                    } else {
+                        msg_copy.yaw *= 4000;
+                    }
+                    // Pitch limits
+                    if ((encoder_data_.pitch >= _pitch_max && msg->pitch > 0) ||
+                        (encoder_data_.pitch <= _pitch_min && msg->pitch < 0)) {
+                        msg_copy.pitch = 0;
+                    } else {
+                        msg_copy.pitch *= 4000;
+                    }
+                } else {
+                    msg_copy.yaw *= 4000;
+                    msg_copy.pitch *= 4000;
+                }
                 cb_queue.push(msg_copy);
             } else if (payload_type==PayloadType::GIMBAL) {
                 msg_copy.yaw*=40;
                 msg_copy.pitch*=-8;
                 cb_queue.push(msg_copy);
             }
-            // if((msg->yaw)>(payload_range.yaw)){
-            //     msg_copy.yaw = payload_range.yaw;
-            // } else if ((msg->yaw)<(0)){
-            //     msg_copy.yaw = 0;
-            // }
-            // if((msg->pitch)>(payload_range.pitch)){
-            //     msg_copy.pitch = payload_range.pitch;
-            // } else if ((msg->pitch)<(0)){
-            //     msg_copy.pitch = 0;
-            // }
         }
         void turret_ctrl_callback(const std_msgs::msg::UInt16::SharedPtr msg){
             if(!_triiger_initialized){
@@ -142,7 +203,16 @@ namespace arista_camera_middleman {
                 _trigger_count = (msg->data)-_trigger_seq;
             }
             _trigger_seq = msg->data;
-
+        };
+        void auto_mode_callback(const std_msgs::msg::Bool::SharedPtr msg){
+            if(_auto_mode_enabled && !msg->data){
+                // Exiting auto mode - clear trigger count to prevent unwanted single shot
+                _trigger_count = 0;
+            }
+            _auto_mode_enabled = msg->data;
+        };
+        void trigger_held_callback(const std_msgs::msg::Bool::SharedPtr msg){
+            _trigger_held = msg->data;
         };
         void timer_callback(){
             if(_initialized_ros){
@@ -157,9 +227,17 @@ namespace arista_camera_middleman {
         uint32_t _gimbal_req_count = 0;
         bool _triiger_initialized=false;
         bool _gimbal_stopped = true;
+        bool _auto_mode_enabled = false;
+        bool _trigger_held = false;
+        bool _limits_received = false;
+        double _yaw_min = 0, _yaw_max = 0;
+        double _pitch_min = 0, _pitch_max = 0;
         rclcpp::Subscription<GimbalPos>::SharedPtr gimbal_ctrl_sub;
         rclcpp::Subscription<std_msgs::msg::UInt16>::SharedPtr turret_ctrl_sub;
-        rclcpp::Publisher<GimbalPos>::SharedPtr max_pose_pub_,current_pose_pub_;
+        rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr auto_mode_sub;
+        rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr trigger_held_sub;
+        rclcpp::Publisher<GimbalPos>::SharedPtr max_pose_pub_,current_pose_pub_,encoder_pub_;
+        GimbalPos encoder_data_;
         rclcpp::TimerBase::SharedPtr timer_;
         rclcpp::executors::SingleThreadedExecutor executor_;
         std::thread executor_thread;

@@ -249,14 +249,30 @@ int main(int argc, char** argv) {
             case CanCommStates::CALIBRATION_RECVD:
                 // Send CONTROL_MODE
                 {
-
                     std::cout << "Switching to control mode" << std::endl;
+
+                    // Send single CAN packet with function ID 0x40 and data 1
+                    can_frame ctrl_frame;
+                    canid_t can_id = 0;
+                    uint8_t* can_id_buff = (uint8_t*)&can_id;
+                    can_id_buff[0] = arista_camera_middleman::protocol::SENDER_CAN_ID;  // 0x39
+                    can_id_buff[1] = 0x40;  // function ID
+                    can_id |= CAN_EFF_FLAG;
+                    ctrl_frame.can_id = can_id;
+                    ctrl_frame.can_dlc = 1;
+                    memset(ctrl_frame.data, 0, 8);
+                    ctrl_frame.data[0] = 1;
+                    printf("Sending control mode packet: ID=0x%x, data=1\n", ctrl_frame.can_id);
+                    if (!can_device_handler.send_can_frame(&ctrl_frame)) {
+                        std::cerr << "Failed to send control mode CAN frame" << std::endl;
+                    }
+
                     state = CanCommStates::CONTROL_MODE;
                     break;
                 }
             case CanCommStates::CONTROL_MODE:
                 // Send CONTROL_MODE
-                {   
+                {
                     arista_interfaces::msg::GimbalPos ctrl_msg;
                     arista_camera_middleman::protocol::TxData_t tx_data;
                     if(payload_ctrl_node->pop_ctrl_cmd(ctrl_msg)){
@@ -277,7 +293,7 @@ int main(int argc, char** argv) {
                         for (int i = 0; i < can_data.can_dlc; i++) {
                             printf("%02X ", can_data.data[i]);
                         }
-                        
+
                         // tx_data.setControlMode();
                         // pan_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.yaw);
                         // tilt_cmd = arista_camera_middleman::angle2cmd(ctrl_msg.pitch);
@@ -290,18 +306,53 @@ int main(int argc, char** argv) {
                         // }
                         // break;
                     }
-                    // if(payload_ctrl_node->should_trigger()){
-                    //     arista_camera_middleman::protocol::TxData_t tx_data;
-                    //     tx_data.setTrigger();
-                    //     can_frame can_data = tx_data.get_can_frame();
-                    //     if (!can_device_handler.send_can_frame(&can_data)) {
-                    //         std::cerr << "Failed to send CAN frame" << std::endl;
-                    //         state = CanCommStates::ERROR;
-                    //         break;
-                    //     }
-                    // }
+                    // Check if in auto mode (RB pressed)
+                    bool is_firing = false;
+                    if(payload_ctrl_node->get_auto_trigger_state(is_firing)){
+                        // Auto mode: send AUTO_TRIGGER_PKT with RT held state
+                        arista_camera_middleman::protocol::TxData_t tx_data;
+                        tx_data.setAutoTrigger(is_firing);
+                        can_frame can_data = tx_data.get_can_frame();
+                        if (!can_device_handler.send_can_frame(&can_data)) {
+                            std::cerr << "Failed to send CAN frame" << std::endl;
+                            state = CanCommStates::ERROR;
+                            break;
+                        }
+                    } else if(payload_ctrl_node->should_trigger()){
+                        // Normal mode: single shot trigger
+                        arista_camera_middleman::protocol::TxData_t tx_data;
+                        tx_data.setTrigger();
+                        can_frame can_data = tx_data.get_can_frame();
+                        if (!can_device_handler.send_can_frame(&can_data)) {
+                            std::cerr << "Failed to send CAN frame" << std::endl;
+                            state = CanCommStates::ERROR;
+                            break;
+                        }
+                    }
+
+                    // Check for incoming encoder/calibration data (non-blocking with short timeout)
+                    can_frame rx_frame;
+                    int ret = can_device_handler.recv_can_timeout(&rx_frame, 1);
+                    if (ret > 0) {
+                        arista_camera_middleman::protocol::RxData_t::Data rx_data;
+                        auto fn_id = arista_camera_middleman::protocol::get_rx_data(rx_frame, rx_data);
+                        if (fn_id == arista_camera_middleman::protocol::RxData_t::FunctionId::PAN_ENCODER_PKT) {
+                            payload_ctrl_node->update_pan_encoder(rx_data.encoder.angle_degrees);
+                            payload_ctrl_node->publish_encoder_data();
+                        } else if (fn_id == arista_camera_middleman::protocol::RxData_t::FunctionId::TILT_ENCODER_PKT) {
+                            payload_ctrl_node->update_tilt_encoder(rx_data.encoder.angle_degrees);
+                            payload_ctrl_node->publish_encoder_data();
+                        } else if (fn_id == arista_camera_middleman::protocol::RxData_t::FunctionId::CALIBRATION_LIMITS_PKT) {
+                            payload_ctrl_node->set_calibration_limits(
+                                rx_data.calibration_limits.pan_min,
+                                rx_data.calibration_limits.pan_max,
+                                rx_data.calibration_limits.tilt_min,
+                                rx_data.calibration_limits.tilt_max
+                            );
+                        }
+                    }
                     break;
-                    
+
                 }
             case CanCommStates::ERROR:
                 std::cerr << "Error in state machine" << std::endl;
