@@ -129,10 +129,15 @@ def make_launch_desc(robot_conf:AvailableRobot):
         output='screen',
         parameters=[{
             'robot_ip': ip,
-            'camera_id': 'thermal',
-            'port': 5032
+            'device': '/dev/video2',
+            'port': 5032,
+            'width': 640,
+            'height': 480,
+            'framerate': 30,
+            'use_libcamera': False,
+            'bitrate': 3000,
         }],
-        respawn=True
+        respawn=False
     )
     rgb_cam_stream = Node(
         package='arista_video_stream',
@@ -142,18 +147,21 @@ def make_launch_desc(robot_conf:AvailableRobot):
         output='screen',
         parameters=[{
             'robot_ip': ip,
-            'device': '/dev/video0',
+            # 'device': '/dev/video0',
             'port': 5035,
-            'yuy2_width': 640,
-            'yuy2_height': 480,
-            'local_preview': False  # Set to False to disable local preview window
+            'width': 640,
+            'height': 480,
+            'framerate': 30,
+            'use_libcamera': True,  # Set to True for RPi cameras using libcamerasrc
+            'bitrate': 3000,
+            'local_preview': False,
         }],
         respawn=False
     )
     return launch.LaunchDescription([
         # can_control_node,
-        # zoom_control_node,
-        # thermal_cam_stream,
+        #zoom_control_node,
+        thermal_cam_stream,
         rgb_cam_stream,
     ])
 
