@@ -10,9 +10,11 @@ import subprocess
 import re
 import time
 import statistics
+import os
 import rclpy
 from rclpy.qos import QoSProfile, DurabilityPolicy,ReliabilityPolicy,HistoryPolicy
 from rclpy.node import Node as rclNode
+from ament_index_python.packages import get_package_share_directory
 
 def ping_host(host, count=4):
     # Determine OS-specific ping parameters
@@ -105,6 +107,20 @@ def get_robot_config():
 def make_launch_desc(robot_conf:AvailableRobot):
     ip = robot_conf.robot_ip
     namespace = robot_conf.robot_name
+
+    # Get config file path
+    pkg_share = get_package_share_directory('arista_camera_middleman')
+    gimbal_stabilizer_config = os.path.join(pkg_share, 'config', 'gimbal_stabilizer_config.yaml')
+
+    gimbal_stabilizer_node = Node(
+        package='arista_camera_middleman',
+        executable='gimbal_stabilizer',
+        name='gimbal_stabilizer',
+        namespace=namespace,
+        output='screen',
+        parameters=[gimbal_stabilizer_config],
+        respawn=True
+    )
     can_control_node = Node(
         package='arista_camera_middleman',
         executable='can_control',
@@ -162,6 +178,7 @@ def make_launch_desc(robot_conf:AvailableRobot):
         respawn=False
     )
     return launch.LaunchDescription([
+        gimbal_stabilizer_node,
         can_control_node,
         zoom_control_node,
         thermal_cam_stream,

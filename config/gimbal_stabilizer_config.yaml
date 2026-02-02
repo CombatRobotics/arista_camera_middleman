@@ -1,0 +1,6 @@
+gimbal_stabilizer:
+  ros__parameters:
+    input_topic: "gimbal/cmd_pose"
+    output_topic: "gimbal/cmd_pose/stable"
+    publish_rate: 50.0  # Hz
+    timeout_ms: 500     # Timeout in milliseconds - if no data received, values reset to 0

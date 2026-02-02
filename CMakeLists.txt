@@ -68,14 +68,24 @@ target_include_directories(auto_focus_node PUBLIC
 ament_target_dependencies(auto_focus_node rclcpp sensor_msgs cv_bridge)
 target_link_libraries(auto_focus_node ${OpenCV_LIBS})
 
-# Install the launch folder
-install(DIRECTORY launch
+add_executable(gimbal_stabilizer src/gimbal_stabilizer.cpp)
+target_include_directories(gimbal_stabilizer PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(gimbal_stabilizer
+  "rclcpp"
+  "arista_interfaces"
+)
+
+# Install the launch and config folders
+install(DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME})
 
 
 # Install the executable
-install(TARGETS can_control rpicam_test focuser_test 
-  auto_focus_node zoom_control
+install(TARGETS can_control rpicam_test focuser_test
+  auto_focus_node zoom_control gimbal_stabilizer
     DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

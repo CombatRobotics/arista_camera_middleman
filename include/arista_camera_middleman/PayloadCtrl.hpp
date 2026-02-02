@@ -70,7 +70,7 @@ namespace arista_camera_middleman {
         void _initialize_ros(){
             if(_initialized_ros) return;
             gimbal_ctrl_sub = this->create_subscription<GimbalPos>(
-                "gimbal/cmd_pose", 10,
+                "gimbal/cmd_pose/stable", 10,
                 std::bind(&PayloadControl::gimbal_ctrl_callback, this, std::placeholders::_1)
             );
             turret_ctrl_sub = this->create_subscription<std_msgs::msg::UInt16>(
