@@ -126,7 +126,7 @@ def make_launch_desc(robot_conf:AvailableRobot):
         executable='can_control',
         name='can_control',
         namespace=namespace,
-        output='screen',
+        # output='screen',
         respawn=True
     )
     zoom_control_node = Node(
@@ -174,11 +174,12 @@ def make_launch_desc(robot_conf:AvailableRobot):
             'use_libcamera': True,  # Set to True for RPi cameras using libcamerasrc
             'bitrate': 800,
             'local_preview': False,
+            'flip_video': True,  # Flip video feed vertically (rotate 180)
         }],
         respawn=False
     )
     return launch.LaunchDescription([
-        gimbal_stabilizer_node,
+        # gimbal_stabilizer_node,
         can_control_node,
         zoom_control_node,
         thermal_cam_stream,
