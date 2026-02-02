@@ -44,7 +44,7 @@ class MiddlemanNode(rclNode):
             history=HistoryPolicy.KEEP_LAST,
             depth=1
         )
-        self.declare_parameter('max_latency', 1.5)
+        self.declare_parameter('max_latency', 15)
         self.max_latency = self.get_parameter('max_latency').value
         self._publisher = self.create_publisher(Empty, '/request_available_robots', 10)
         self._subscriber = self.create_subscription(AvailableRobot, '/available_robots', self._robot_callback, qos_profile)
@@ -130,12 +130,14 @@ def make_launch_desc(robot_conf:AvailableRobot):
         parameters=[{
             'robot_ip': ip,
             'device': '/dev/video2',
+            # 'camera_id': 'thermal',
             'port': 5032,
             'width': 640,
             'height': 480,
             'framerate': 30,
-            'use_libcamera': False,
-            'bitrate': 3000,
+            'use_pipewiresrc': False,
+            # 'pipewire_path': 50,  # Find with: wpctl status (look for thermal camera under Video > Sources)
+            'bitrate': 800,
         }],
         respawn=False
     )
@@ -147,20 +149,21 @@ def make_launch_desc(robot_conf:AvailableRobot):
         output='screen',
         parameters=[{
             'robot_ip': ip,
+            'camera_id': 'zoom_rgb',
             # 'device': '/dev/video0',
             'port': 5035,
             'width': 640,
             'height': 480,
             'framerate': 30,
             'use_libcamera': True,  # Set to True for RPi cameras using libcamerasrc
-            'bitrate': 3000,
+            'bitrate': 800,
             'local_preview': False,
         }],
         respawn=False
     )
     return launch.LaunchDescription([
-        # can_control_node,
-        #zoom_control_node,
+        can_control_node,
+        zoom_control_node,
         thermal_cam_stream,
         rgb_cam_stream,
     ])
