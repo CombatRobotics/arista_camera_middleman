@@ -128,6 +128,9 @@ enum class gimbal_rx_pkt_t {
     ALIVE_PKT                 = 0x22,
     FEEBACK_PKT               = 0x23,
     WHO_AMI_ACK               = 0x33,
+    PAN_ENCODER_PKT           = 0x37,
+    TILT_ENCODER_PKT          = 0x38,
+    CALIBRATION_LIMITS_PKT    = 0x3A,
 } ;
 
 enum class gimbal_tx_pkt_t {
@@ -197,6 +200,9 @@ struct RxData_t{
         ALIVE_PKT                 = 0x22,
         WHO_AM_I_ACK              = 0x33,
         FEEBACK_PKT               = 0x23,
+        PAN_ENCODER_PKT           = 0x37,
+        TILT_ENCODER_PKT          = 0x38,
+        CALIBRATION_LIMITS_PKT    = 0x3A,
         UNKNOWN_PKT               = 0x00
     } function_id;
     union Data {
@@ -218,6 +224,15 @@ struct RxData_t{
             gimbal_position_t pan_position;
             gimbal_position_t tilt_position;
         } feedback;
+        struct Encoder{
+            double angle_degrees;  // angle in degrees (centidegrees / 100)
+        } encoder;
+        struct CalibrationLimits{
+            double pan_min;
+            double pan_max;
+            double tilt_min;
+            double tilt_max;
+        } calibration_limits;
 
     } data;
 };
@@ -236,6 +251,7 @@ struct TxData_t{
         WHO_DIS_PKT             = 0x32,
         CALLIBRATION_STATUS     = 0x36,
         TRIGGER_PKT            = 0x34,
+        AUTO_TRIGGER_PKT       = 0x39,
     } function_id;
     union Data {
         struct BroadcastKey{
@@ -272,6 +288,9 @@ struct TxData_t{
         } callibration;
         struct WhoAmI{} who_am_i;
         struct Trigger{} trigger;
+        struct AutoTrigger{
+            bool is_firing;
+        } auto_trigger;
         struct CallibrationStatus{
         } callibration_status;
     } data;
@@ -295,6 +314,10 @@ struct TxData_t{
     }
     void setTrigger(){
         function_id = FunctionId::TRIGGER_PKT;
+    }
+    void setAutoTrigger(bool is_firing){
+        function_id = FunctionId::AUTO_TRIGGER_PKT;
+        data.auto_trigger.is_firing = is_firing;
     }
     void setHeartBeat(){
         function_id = FunctionId::HEARTBEAT_PKT;
@@ -402,6 +425,11 @@ struct TxData_t{
                 int16_t * data_buff = (int16_t*)(frame.data);
                 break;
             }
+            case FunctionId::AUTO_TRIGGER_PKT:
+            {
+                frame.data[0] = data.auto_trigger.is_firing ? 1 : 0;
+                break;
+            }
             case FunctionId::HEARTBEAT_PKT:
             {
                 int16_t * data_buff = (int16_t*)(frame.data);
@@ -471,6 +499,28 @@ RxData_t::FunctionId get_rx_data(const can_frame& can_data, RxData_t::Data& data
                 data.device_id.device_id = static_cast<device_id_t>(can_data.data[0]);
                 printf("device id recv %d\n",data.device_id.device_id);
                 // print("d")
+                break;
+            }
+        case RxData_t::FunctionId::PAN_ENCODER_PKT:
+        case RxData_t::FunctionId::TILT_ENCODER_PKT:
+            {
+                // Encoder data is signed 16-bit centidegrees (LSB first)
+                int16_t angle_centidegrees = static_cast<int16_t>(can_data.data[0] | (can_data.data[1] << 8));
+                data.encoder.angle_degrees = angle_centidegrees / 100.0;
+                break;
+            }
+        case RxData_t::FunctionId::CALIBRATION_LIMITS_PKT:
+            {
+                // 8 bytes: pan_min, pan_max, tilt_min, tilt_max (all int16_t little-endian, centidegrees)
+                int16_t pan_min = static_cast<int16_t>(can_data.data[0] | (can_data.data[1] << 8));
+                int16_t pan_max = static_cast<int16_t>(can_data.data[2] | (can_data.data[3] << 8));
+                int16_t tilt_min = static_cast<int16_t>(can_data.data[4] | (can_data.data[5] << 8));
+                int16_t tilt_max = static_cast<int16_t>(can_data.data[6] | (can_data.data[7] << 8));
+                // Convert centidegrees to degrees (same as encoder data)
+                data.calibration_limits.pan_min = pan_min / 100.0;
+                data.calibration_limits.pan_max = pan_max / 100.0;
+                data.calibration_limits.tilt_min = tilt_min / 100.0;
+                data.calibration_limits.tilt_max = tilt_max / 100.0;
                 break;
             }
         default:
