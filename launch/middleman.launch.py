@@ -1,5 +1,5 @@
 import launch
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from std_msgs.msg import Empty
@@ -44,63 +44,30 @@ class MiddlemanNode(rclNode):
             history=HistoryPolicy.KEEP_LAST,
             depth=1
         )
-        self.declare_parameter('max_latency', 15)
-        self.max_latency = self.get_parameter('max_latency').value
-        self._publisher = self.create_publisher(Empty, '/request_available_robots', 10)
+        self._publisher = self.create_publisher (Empty, '/request_available_robots', 10)
         self._subscriber = self.create_subscription(AvailableRobot, '/available_robots', self._robot_callback, qos_profile)
         self.robots = dict()
-        self.selected_robot = None  # Robot with latency < 1ms
         self.get_logger().info('middleman node started')
 
     def _robot_callback(self, msg: AvailableRobot):
-        # Skip if we already found a suitable robot
-        if self.selected_robot is not None:
-            return
-
-        # Skip if we already checked this robot
-        if msg.robot_name in self.robots:
-            return
-
         self.robots[msg.robot_name] = msg
-        self.get_logger().info(f'Discovered robot: {msg.robot_name} at {msg.robot_ip}, pinging...')
-
-        # Ping the robot immediately
-        latency = ping_host(msg.robot_ip, count=2)  # Use fewer pings for faster check
-
-        if latency >= 0:
-            self.get_logger().info(f'Robot {msg.robot_name} latency: {latency:.2f}ms')
-            if latency < self.max_latency:
-                self.get_logger().info(f'Selected robot {msg.robot_name} with latency {latency:.2f}ms < {self.max_latency}ms')
-                self.selected_robot = msg
-        else:
-            self.get_logger().warn(f'Failed to ping robot {msg.robot_name} at {msg.robot_ip}')
 
 def get_robot_config():
     node = MiddlemanNode()
-    max_wait_time = 30  # Maximum seconds to wait for a suitable robot
-    start_time = node.get_clock().now()
-
-    while True:
-        node.get_logger().info('requesting available robots')
-        node._publisher.publish(Empty())
-        rclpy.spin_once(node, timeout_sec=1)
-
-        # Check if we found a robot with latency < 1ms
-        if node.selected_robot is not None:
-            node.get_logger().info(f'Using robot: {node.selected_robot.robot_name}')
-            return node.selected_robot
-
-        # Check timeout
-        elapsed = (node.get_clock().now() - start_time).nanoseconds / 1e9
-        if elapsed > max_wait_time:
-            node.get_logger().warn('Timeout waiting for robot with latency < 1ms')
-            break
-
-        time.sleep(0.5)
-
-    # Fallback: if no robot with <1ms latency found, return None
-    node.get_logger().error('No robot found with latency < 1ms')
-    return None
+    # Request available robots
+    node._publisher.publish(Empty())
+    
+    # Wait for robots to be discovered
+    while len(node.robots) == 0:
+        rclpy.spin_once(node, timeout_sec=1.0)
+        node._publisher.publish(Empty())  # Keep requesting
+        node.get_logger().info('Waiting for available robots...')
+    
+    # Return first available robot
+    robot = list(node.robots.values())[0]
+    node.get_logger().info(f'Found robot: {robot.robot_name} at {robot.robot_ip}')
+    node.destroy_node()
+    return robot
 
 def make_launch_desc(robot_conf:AvailableRobot):
     ip = robot_conf.robot_ip
@@ -110,56 +77,44 @@ def make_launch_desc(robot_conf:AvailableRobot):
         executable='can_control',
         name='can_control',
         namespace=namespace,
-        output='screen',
+        output='log',
         respawn=True
     )
     zoom_control_node = Node(
-        package='arista_camera_middleman',
-        executable='zoom_control',
-        name='zoom_control',
+        package='harshcam_camera_control',
+        executable='camera_control_node',
+        name='camera_control_node',
         namespace=namespace,
         output='screen',
+        parameters=[{
+            'device': '/dev/harshcam_zoom_control',
+            'baudrate': 115200
+        }],
         respawn=True
     )
-    thermal_cam_stream = Node(
-        package='arista_video_stream',
-        executable='rpicam_stream.py',
-        name='thermal_cam_stream',
-        namespace=namespace,
+    thermal_cam_stream = ExecuteProcess(
+        cmd=[
+            'gst-launch-1.0',
+            'v4l2src', 'device=/dev/thermal_cam_digitalcore', '!',
+            'video/x-raw,width=640,height=480', '!',
+            'videoconvert', '!',
+            'x264enc', 'tune=zerolatency', 'bitrate=1000', 'speed-preset=ultrafast', '!',
+            'rtph264pay', 'config-interval=1', 'pt=96', '!',
+            'udpsink', f'host={ip}', 'port=5032',
+        ],
         output='screen',
-        parameters=[{
-            'robot_ip': ip,
-            'device': '/dev/video2',
-            # 'camera_id': 'thermal',
-            'port': 5032,
-            'width': 640,
-            'height': 480,
-            'framerate': 30,
-            'use_pipewiresrc': False,
-            # 'pipewire_path': 50,  # Find with: wpctl status (look for thermal camera under Video > Sources)
-            'bitrate': 800,
-        }],
-        respawn=False
     )
-    rgb_cam_stream = Node(
-        package='arista_video_stream',
-        executable='rpicam_stream.py',
-        name='rgb_cam_stream',
-        namespace=namespace,
+    rgb_cam_stream = ExecuteProcess(
+        cmd=[
+            'gst-launch-1.0',
+            'v4l2src', 'device=/dev/rgb_zoom_harshcam', '!',
+            'video/x-raw,width=1920,height=1080', '!',
+            'videoconvert', '!',
+            'x264enc', 'tune=zerolatency', 'bitrate=4000', 'speed-preset=ultrafast', '!',
+            'rtph264pay', 'config-interval=1', 'pt=96', '!',
+            'udpsink', f'host={ip}', 'port=5035',
+        ],
         output='screen',
-        parameters=[{
-            'robot_ip': ip,
-            'camera_id': 'zoom_rgb',
-            # 'device': '/dev/video0',
-            'port': 5035,
-            'width': 640,
-            'height': 480,
-            'framerate': 30,
-            'use_libcamera': True,  # Set to True for RPi cameras using libcamerasrc
-            'bitrate': 800,
-            'local_preview': False,
-        }],
-        respawn=False
     )
     return launch.LaunchDescription([
         can_control_node,
